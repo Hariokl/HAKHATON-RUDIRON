@@ -15,16 +15,15 @@ class Block(QGraphicsPathItem):
         self.initUI()
         self.setFlags(
             QGraphicsItem.ItemIsSelectable |
-            QGraphicsItem.ItemIsMovable |
-            QGraphicsItem.ItemSendsScenePositionChanges
+            QGraphicsItem.ItemIsMovable
         )
         self.next_block = None
         self.prev_block = None
         self.child_blocks = []
         self.parent_block = None
-        self.is_dragging = False
         self.highlighted_block = None
-        self.dragging_from_top = False  # New attribute to track where the block is grabbed
+        self.dragging_from_top = False
+        self.initial_positions = {}
 
     def initUI(self):
         path = QPainterPath()
@@ -33,8 +32,6 @@ class Block(QGraphicsPathItem):
         notch_size = 10
         tab_width = 20
         tab_height = 10
-
-        # Create the block shape with a top notch and bottom tab
         path.moveTo(0, notch_size)
         path.lineTo(tab_width, notch_size)
         path.lineTo(tab_width + notch_size, 0)
@@ -48,12 +45,9 @@ class Block(QGraphicsPathItem):
         path.lineTo(tab_width, height - tab_height)
         path.lineTo(0, height - tab_height)
         path.closeSubpath()
-
         self.setPath(path)
         self.setBrush(QBrush(self.color))
         self.setPen(QPen(Qt.black))
-
-        # Add text
         self.text_item = QGraphicsTextItem(self.text, self)
         font = QFont('Arial', 12)
         self.text_item.setFont(font)
@@ -61,49 +55,58 @@ class Block(QGraphicsPathItem):
         self.text_item.setPos((width - text_rect.width()) / 2, (height - text_rect.height()) / 2)
 
     def mousePressEvent(self, event):
-        super().mousePressEvent(event)
-        self.is_dragging = True
-        # Determine where the user clicked (top or bottom half)
         click_position = event.pos().y()
         block_height = self.boundingRect().height()
         self.dragging_from_top = click_position < (block_height / 2)
-
-        # Disconnect from previous and next blocks if any
-        if self.prev_block:
-            self.prev_block.next_block = None
-            self.prev_block = None
-        if self.next_block:
-            self.disconnect_next_blocks()
+        self.initial_positions = {}
+        for block in self.get_all_connected_blocks():
+            self.initial_positions[block] = block.pos()
+        super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
         super().mouseMoveEvent(event)
+        delta = self.pos() - self.initial_positions[self]
+        for block in self.get_all_connected_blocks():
+            if block != self:
+                block.setPos(self.initial_positions[block] + delta)
         self.check_for_snap()
 
     def mouseReleaseEvent(self, event):
         super().mouseReleaseEvent(event)
-        self.is_dragging = False
         self.snap_to_block()
 
-    def disconnect_next_blocks(self):
-        # Recursively disconnect next blocks
+    def mouseDoubleClickEvent(self, event):
+        if self.prev_block:
+            self.prev_block.next_block = None
+            self.prev_block = None
         if self.next_block:
-            self.next_block.disconnect_next_blocks()
             self.next_block.prev_block = None
             self.next_block = None
+        if self.parent_block:
+            self.parent_block.child_blocks.remove(self)
+            self.parent_block = None
+        super().mouseDoubleClickEvent(event)
+
+    def get_all_connected_blocks(self):
+        connected = []
+        block = self
+        while block.prev_block:
+            block = block.prev_block
+        while block:
+            connected.append(block)
+            block = block.next_block
+        return connected
 
     def check_for_snap(self):
-        # Highlight potential snap targets
         colliding_items = self.scene().collidingItems(self)
         for item in colliding_items:
-            if isinstance(item, Block) and item != self:
+            if isinstance(item, Block) and item != self and item not in self.get_all_connected_blocks():
                 if self.dragging_from_top:
-                    # User is dragging from top, so we check if we are near the bottom of another block
                     if self.is_near(item, above=True):
                         item.setPen(QPen(QColor('green'), 2))
                         self.highlighted_block = item
                         return
                 else:
-                    # User is dragging from bottom, so we check if we are near the top of another block
                     if self.is_near(item, below=True):
                         item.setPen(QPen(QColor('blue'), 2))
                         self.highlighted_block = item
@@ -113,21 +116,18 @@ class Block(QGraphicsPathItem):
                     item.setPen(QPen(QColor('purple'), 2))
                     self.highlighted_block = item
                     return
-        # No suitable block found
         if self.highlighted_block:
             self.highlighted_block.setPen(QPen(Qt.black))
             self.highlighted_block = None
 
     def is_near(self, other_block, above=False, below=False):
-        threshold = 20
+        threshold = 40
         if above:
-            # Check if the bottom of self is near the top of other_block
             self_bottom = self.sceneBoundingRect().bottom()
             other_top = other_block.sceneBoundingRect().top()
             if abs(self_bottom - other_top) < threshold and abs(self.scenePos().x() - other_block.scenePos().x()) < threshold:
                 return True
         if below:
-            # Check if the top of self is near the bottom of other_block
             self_top = self.sceneBoundingRect().top()
             other_bottom = other_block.sceneBoundingRect().bottom()
             if abs(self_top - other_bottom) < threshold and abs(self.scenePos().x() - other_block.scenePos().x()) < threshold:
@@ -137,20 +137,17 @@ class Block(QGraphicsPathItem):
     def snap_to_block(self):
         if self.highlighted_block:
             if isinstance(self.highlighted_block, ControlBlock):
-                # Snap into the control block
                 self.parent_block = self.highlighted_block
                 self.highlighted_block.child_blocks.append(self)
                 self.setPos(self.highlighted_block.scenePos().x() + 20, self.highlighted_block.scenePos().y() + 40)
             else:
                 if self.dragging_from_top and self.is_near(self.highlighted_block, above=True):
-                    # Snap the bottom of self to the top of the highlighted block
                     self.next_block = self.highlighted_block
                     self.highlighted_block.prev_block = self
                     new_x = self.highlighted_block.scenePos().x()
                     new_y = self.highlighted_block.scenePos().y() - self.boundingRect().height() + 2
                     self.setPos(new_x, new_y)
                 elif not self.dragging_from_top and self.is_near(self.highlighted_block, below=True):
-                    # Snap the top of self to the bottom of the highlighted block
                     self.prev_block = self.highlighted_block
                     self.highlighted_block.next_block = self
                     new_x = self.highlighted_block.scenePos().x()
@@ -182,13 +179,10 @@ class ControlBlock(Block):
     def initControlUI(self):
         path = QPainterPath()
         width = 140
-        height = 80
+        height = 100
         notch_size = 10
         tab_width = 20
         tab_height = 10
-        open_area_height = 40
-
-        # Create a control block shape with an open area for child blocks
         path.moveTo(0, notch_size)
         path.lineTo(tab_width, notch_size)
         path.lineTo(tab_width + notch_size, 0)
@@ -202,12 +196,9 @@ class ControlBlock(Block):
         path.lineTo(tab_width, height - notch_size)
         path.lineTo(0, height - notch_size)
         path.closeSubpath()
-
         self.setPath(path)
         self.setBrush(QBrush(self.color))
         self.setPen(QPen(Qt.black))
-
-        # Add text
         self.text_item.setPlainText(self.text)
         font = QFont('Arial', 12)
         self.text_item.setFont(font)
@@ -215,9 +206,8 @@ class ControlBlock(Block):
         self.text_item.setPos((width - text_rect.width()) / 2, 10)
 
     def is_open_area(self, pos):
-        # Define the open area where child blocks can be placed
         local_pos = self.mapFromScene(pos)
-        open_rect = QRectF(10, 30, self.boundingRect().width() - 20, 40)
+        open_rect = QRectF(10, 30, self.boundingRect().width() - 20, self.boundingRect().height() - 60)
         return open_rect.contains(local_pos)
 
     def generate_code(self):
@@ -252,7 +242,6 @@ class BlockPalette(QWidget):
             QColor('#F1C40F'),
             QColor('#9B59B6')
         ]
-
         for text, color in zip(blocks, colors):
             button = QPushButton(text)
             button.setStyleSheet(f'background-color: {color.name()}; color: white; font-weight: bold;')
@@ -276,39 +265,27 @@ class MainWindow(QWidget):
 
     def setupUI(self):
         main_layout = QHBoxLayout(self)
-
-        # Block Palette
         self.palette = BlockPalette(self)
-
-        # Workspace
         self.workspace = Workspace(self)
-
-        # Run Button
         self.run_button = QPushButton('Run')
         self.run_button.setStyleSheet('font-size: 16px; height: 40px;')
         self.run_button.clicked.connect(self.run_program)
-
-        # Arrange layouts
         left_layout = QVBoxLayout()
         left_layout.addWidget(QLabel('<h2>Blocks</h2>'))
         left_layout.addWidget(self.palette)
         left_layout.addStretch()
         left_layout.addWidget(self.run_button)
-
         main_layout.addLayout(left_layout)
         main_layout.addWidget(self.workspace)
 
     def run_program(self):
-        # Find all top-level blocks
         blocks = [item for item in self.workspace.scene().items() if isinstance(item, Block) and item.prev_block is None and not item.parent_block]
         program = []
         for block in blocks:
             code = block.generate_code()
             program.append(code)
         rudiron_code = '\n'.join(program)
-        # Display or execute the code
         QMessageBox.information(self, "Program", f"Program to execute on Rudiron:\n{rudiron_code}")
-        # Here you can add code to send 'rudiron_code' to the Rudiron controller
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
