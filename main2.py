@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QBrush, QColor, QPen, QPainterPath, QFont, QPainter
 from PyQt5.QtCore import Qt, QRectF, QPointF
-
+from PyQt5 import QtGui
 
 class Block(QGraphicsPathItem):
     def __init__(self, text, color, parent=None):
@@ -69,12 +69,12 @@ class Block(QGraphicsPathItem):
 
         # Store initial positions of all connected blocks
         self.initial_positions = {}
-        blocks_to_move = self.get_blocks_to_move()
+        blocks_to_move = self.get_all_connected_blocks()
         for block in blocks_to_move:
             # Store the scene positions
             self.initial_positions[block] = block.mapToScene(QPointF(0, 0))
 
-        # Disconnect from previous or next blocks depending on where the block is grabbed
+        # Disconnect from previous and next blocks depending on where the block is grabbed
         if self.dragging_from_top:
             if self.prev_block:
                 self.prev_block.next_block = None
@@ -98,11 +98,11 @@ class Block(QGraphicsPathItem):
         delta = new_scene_pos - self.initial_positions[self]
 
         # Move connected blocks
-        blocks_to_move = self.get_blocks_to_move()
+        blocks_to_move = self.get_all_connected_blocks()
         for block in blocks_to_move:
             if block != self:
                 initial_pos = self.initial_positions[block]
-                # Corrected position setting
+                # Correct position setting
                 if block.parentItem():
                     # Convert scene position to parent's coordinate system
                     parent_pos = block.parentItem().mapFromScene(initial_pos + delta)
@@ -135,32 +135,20 @@ class Block(QGraphicsPathItem):
             self.parent_block.remove_child_block(self)
             self.parent_block = None
 
-    def get_blocks_to_move(self):
-        # Get blocks connected below if dragging from top, or above if dragging from bottom
-        blocks = set()
-        stack = [self]
-        while stack:
-            block = stack.pop()
-            if block not in blocks:
-                blocks.add(block)
-                if isinstance(block, ControlBlock):
-                    stack.extend(block.child_blocks)
-                if self.dragging_from_top and block.next_block:
-                    stack.append(block.next_block)
-                elif not self.dragging_from_top and block.prev_block:
-                    stack.append(block.prev_block)
-        return blocks
-
     def get_all_connected_blocks(self):
-        # Get all blocks connected via next_block
+        # Get all connected blocks (both prev and next, and child blocks)
         blocks = set()
         stack = [self]
         while stack:
             block = stack.pop()
             if block not in blocks:
                 blocks.add(block)
+                # Include child blocks if it's a ControlBlock
                 if isinstance(block, ControlBlock):
                     stack.extend(block.child_blocks)
+                # Add connected blocks
+                if block.prev_block:
+                    stack.append(block.prev_block)
                 if block.next_block:
                     stack.append(block.next_block)
         return blocks
@@ -233,7 +221,9 @@ class Block(QGraphicsPathItem):
             self.highlighted_block.setPen(QPen(Qt.black))
 
             # Disconnect any existing connections
-            self.disconnect_blocks()
+            # Only disconnect if not snapping into a control block
+            if not (isinstance(self.highlighted_block, ControlBlock) and self.highlighted_block.is_open_area(self.scenePos())):
+                self.disconnect_blocks()
 
             if isinstance(self.highlighted_block, ControlBlock) and self.highlighted_block.is_open_area(self.scenePos()):
                 # Snap into the control block
@@ -243,11 +233,16 @@ class Block(QGraphicsPathItem):
                     # Snap the bottom of self to the top of the highlighted block
                     self.next_block = self.highlighted_block
                     self.highlighted_block.prev_block = self
-
+                    
                     # Align positions
                     new_x = self.highlighted_block.scenePos().x()
                     new_y = self.highlighted_block.scenePos().y() - self.boundingRect().height() + 2
                     self.setPos(new_x, new_y)
+                    prev_block = self.prev_block
+                    while prev_block is not None:
+                        if prev_block.parent_block is not None:
+                            prev_block.parent_block.add_child_blocks(self)
+                        prev_block = prev_block.prev_block
                 elif not self.dragging_from_top and self.is_near(self.highlighted_block, below=True):
                     # Snap the top of self to the bottom of the highlighted block
                     self.prev_block = self.highlighted_block
@@ -257,13 +252,38 @@ class Block(QGraphicsPathItem):
                     new_x = self.highlighted_block.scenePos().x()
                     new_y = self.highlighted_block.scenePos().y() + self.highlighted_block.boundingRect().height() - 2
                     self.setPos(new_x, new_y)
+                    prev_block = self.prev_block
+                    while prev_block is not None:
+                        if prev_block.parent_block is not None:
+                            prev_block.parent_block.add_child_blocks(self)
+                        prev_block = prev_block.prev_block
+
             self.highlighted_block = None
         else:
             # If not snapped to anything, ensure the block is standalone
-            self.prev_block = None
-            self.next_block = None
-            self.parent_block = None
+            pass  # Do not disconnect here to maintain existing connections
+    
 
+    def move_down(self, delta_y=20):
+        """
+        Moves the block downward by delta_y pixels.
+        Also moves all connected next blocks accordingly.
+        """
+        if self.parent_block:
+            # If the block is nested inside a control block, move the entire control block
+            self.parent_block.move_down(delta_y)
+            return
+
+        # Move this block
+        current_pos = self.scenePos()
+        new_pos = QPointF(current_pos.x(), current_pos.y() + delta_y)
+        self.setPos(new_pos)
+
+        # Move connected next blocks
+        if self.next_block:
+            self.next_block.move_down(delta_y)
+
+    
     def generate_code(self):
         command_mapping = {
             'Move Forward': 'move_forward()',
@@ -339,6 +359,8 @@ class ControlBlock(Block):
         self.height = total_height
         self.update_shape()
         self.reposition_child_blocks()
+        
+            
         # Update parent control blocks
         if self.parent_block:
             self.parent_block.update_size()
@@ -358,6 +380,10 @@ class ControlBlock(Block):
             blk.setFlag(QGraphicsItem.ItemIsMovable, False)
             blk.setZValue(1)  # Child blocks are above control blocks
         self.update_size()
+        updated_block = self.next_block
+        while updated_block is not None:
+            self.next_block.move_down(block.boundingRect().height())
+            updated_block = updated_block.next_block
 
     def remove_child_block(self, block):
         # Remove a block from child_blocks
@@ -465,7 +491,8 @@ class BlockPalette(QWidget):
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('Scratch-like Rudiron Programmer')
+        self.setWindowTitle('Rudiron visual programming')
+        self.setWindowIcon(QtGui.QIcon('ico.png'))
         self.setGeometry(100, 100, 1000, 600)
         self.setupUI()
 
