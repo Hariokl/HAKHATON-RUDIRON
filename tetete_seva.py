@@ -93,6 +93,20 @@ class Block(QGraphicsPathItem):
         #     self.parent_block.remove_child_block(self)
 
         super().mousePressEvent(event)
+    
+    
+    def find_head(self):
+        head = self
+        while head.prev_block:
+            head = head.prev_block
+        return head
+    
+    def find_tail(self):
+        tail = self
+        while tail.next_block:
+            tail = tail.next_block
+        return tail
+    
 
 
     def find_head(self):
@@ -130,11 +144,19 @@ class Block(QGraphicsPathItem):
         head, tail = self.find_head(), self.find_tail()
         head.check_for_snap()
         tail.check_for_snap()
+<<<<<<< HEAD:tetete_seva.py
+=======
+        print(head)
+        print(tail)
+>>>>>>> 424e1594d11f060767611a0369a5caa72386c6be:tetete.py
         # self.check_for_snap()
 
     def mouseReleaseEvent(self, event):
         super().mouseReleaseEvent(event)
-        self.snap_to_block()
+        head, tail = self.find_head(), self.find_tail()
+        head.snap_to_block()
+        tail.snap_to_block()
+        # self.snap_to_block()
 
     def mouseDoubleClickEvent(self, event):
         # Disconnect from previous and next blocks
@@ -171,7 +193,47 @@ class Block(QGraphicsPathItem):
                     stack.append(block.prev_block)
                 if block.next_block:
                     stack.append(block.next_block)
+        print(len(blocks))
         return blocks
+
+    # def check_for_snap(self):
+    #     # Reset any previous highlighted block
+    #     if self.highlighted_block:
+    #         self.highlighted_block.setPen(QPen(Qt.GlobalColor.black))
+    #         self.highlighted_block = None
+
+    #     # Highlight potential snap targets
+    #     colliding_items = self.scene().collidingItems(self)
+
+    #     # Filter out child items and self
+    #     connected_blocks = self.get_all_connected_blocks()
+    #     colliding_items = [item for item in colliding_items if item != self and not self.is_descendant_of(item) and item not in connected_blocks]
+
+    #     for item in colliding_items:
+    #         if isinstance(item, ControlBlock):
+    #             if item.is_open_area(self.scenePos()):
+    #                 item.setPen(QPen(QColor('purple'), 2))
+    #                 self.highlighted_block = item
+    #                 return
+    #             else:
+    #                 if self.dragging_from_top and self.is_near(item, above=True):
+    #                     item.setPen(QPen(QColor('green'), 2))
+    #                     self.highlighted_block = item
+    #                     return
+    #                 elif not self.dragging_from_top and self.is_near(item, below=True):
+    #                     item.setPen(QPen(QColor('blue'), 2))
+    #                     self.highlighted_block = item
+    #                     return
+    #         elif isinstance(item, Block):
+    #             if self.dragging_from_top and self.is_near(item, above=True):
+    #                 item.setPen(QPen(QColor('green'), 2))
+    #                 self.highlighted_block = item
+    #                 return
+    #             elif not self.dragging_from_top and self.is_near(item, below=True):
+    #                 item.setPen(QPen(QColor('blue'), 2))
+    #                 self.highlighted_block = item
+    #                 return
+
 
     def check_for_snap(self):
         # Reset any previous highlighted block
@@ -193,23 +255,25 @@ class Block(QGraphicsPathItem):
                     self.highlighted_block = item
                     return
                 else:
-                    if self.dragging_from_top and self.is_near(item, above=True):
+                    if  self.is_near(item, above=True):
                         item.setPen(QPen(QColor('green'), 2))
                         self.highlighted_block = item
                         return
-                    elif not self.dragging_from_top and self.is_near(item, below=True):
+                    elif  self.is_near(item, below=True):
                         item.setPen(QPen(QColor('blue'), 2))
                         self.highlighted_block = item
                         return
             elif isinstance(item, Block):
-                if self.dragging_from_top and self.is_near(item, above=True):
+                if  self.is_near(item, above=True):
                     item.setPen(QPen(QColor('green'), 2))
                     self.highlighted_block = item
                     return
-                elif not self.dragging_from_top and self.is_near(item, below=True):
+                elif  self.is_near(item, below=True):
                     item.setPen(QPen(QColor('blue'), 2))
                     self.highlighted_block = item
                     return
+
+
 
     def is_descendant_of(self, item):
         # Check if self is a child or descendant of the given item
@@ -236,6 +300,69 @@ class Block(QGraphicsPathItem):
                 return True
         return False
 
+
+
+    # def snap_to_block(self):
+    #     if self.highlighted_block:
+    #         # Reset pen of the highlighted block
+    #         self.highlighted_block.setPen(QPen(Qt.GlobalColor.black))
+
+    #         # Disconnect any existing connections
+    #         # Only disconnect if not snapping into a control block
+    #         # if not (isinstance(self.highlighted_block, ControlBlock) and self.highlighted_block.is_open_area(self.scenePos())):
+    #         #     self.disconnect_blocks()
+
+    #         if isinstance(self.highlighted_block, ControlBlock) and self.highlighted_block.is_open_area(self.scenePos()):
+    #             # Snap into the control block
+    #             if len(self.highlighted_block.child_blocks):
+    #                 self.highlighted_block.child_blocks[-1].next_block = self
+    #                 self.prev_block = self.highlighted_block.child_blocks[-1]
+    #             self.highlighted_block.add_child_blocks(self)
+    #         else:
+    #             if self.dragging_from_top and self.is_near(self.highlighted_block, above=True):
+    #                 if self.highlighted_block.prev_block is not None and self.highlighted_block.prev_block != self:
+    #                     self.prev_block = self.highlighted_block.prev_block
+    #                     self.highlighted_block.prev_block.next_block = self
+    #                     self.prev_block.move_up(self.boundingRect().height())
+    #                 # Snap the bottom of self to the top of the highlighted block
+    #                 self.next_block = self.highlighted_block
+    #                 self.highlighted_block.prev_block = self
+
+    #                 # Align positions
+    #                 new_x = self.highlighted_block.scenePos().x()
+    #                 new_y = self.highlighted_block.scenePos().y() - self.boundingRect().height() + 2
+    #                 self.setPos(new_x, new_y)
+    #                 prev_block = self.prev_block
+    #                 while prev_block is not None:
+    #                     if prev_block.parent_block is not None:
+    #                         prev_block.parent_block.add_child_blocks(self)
+    #                     prev_block = prev_block.prev_block
+    #             elif not self.dragging_from_top and self.is_near(self.highlighted_block, below=True):
+    #                 print(self.highlighted_block)
+    #                 if self.highlighted_block.next_block is not None and self.highlighted_block.next_block != self:
+    #                     self.next_block = self.highlighted_block.next_block
+    #                     self.highlighted_block.next_block.prev_block = self
+    #                     self.next_block.move_down(self.boundingRect().height(), False)
+    #                 # Snap the top of self to the bottom of the highlighted block
+    #                 self.prev_block = self.highlighted_block
+    #                 self.highlighted_block.next_block = self
+
+    #                 # Align positions
+    #                 new_x = self.highlighted_block.scenePos().x()
+    #                 new_y = self.highlighted_block.scenePos().y() + self.highlighted_block.boundingRect().height() - 2
+    #                 self.setPos(new_x, new_y)
+    #                 prev_block = self.prev_block
+    #                 while prev_block is not None:
+    #                     if prev_block.parent_block is not None:
+    #                         prev_block.parent_block.add_child_blocks(self)
+    #                     prev_block = prev_block.parent_block
+
+    #         self.highlighted_block = None
+    #     else:
+    #         # If not snapped to anything, ensure the block is standalone
+    #         pass  # Do not disconnect here to maintain existing connections
+
+
     def snap_to_block(self):
         if self.highlighted_block:
             # Reset pen of the highlighted block
@@ -253,7 +380,11 @@ class Block(QGraphicsPathItem):
                     self.prev_block = self.highlighted_block.child_blocks[-1]
                 self.highlighted_block.add_child_blocks(self)
             else:
+<<<<<<< HEAD:tetete_seva.py
                 if self.dragging_from_top and self.is_near(self.highlighted_block, above=True):
+=======
+                if self.is_near(self.highlighted_block, above=True):
+>>>>>>> 424e1594d11f060767611a0369a5caa72386c6be:tetete.py
                     if self.highlighted_block.prev_block is not None and self.highlighted_block.prev_block != self:
                         self.prev_block = self.highlighted_block.prev_block
                         self.highlighted_block.prev_block.next_block = self
@@ -271,7 +402,12 @@ class Block(QGraphicsPathItem):
                         if prev_block.parent_block is not None:
                             prev_block.parent_block.add_child_blocks(self)
                         prev_block = prev_block.prev_block
+<<<<<<< HEAD:tetete_seva.py
                 elif not self.dragging_from_top and self.is_near(self.highlighted_block, below=True):
+=======
+                elif self.is_near(self.highlighted_block, below=True):
+                    print(self.highlighted_block)
+>>>>>>> 424e1594d11f060767611a0369a5caa72386c6be:tetete.py
                     if self.highlighted_block.next_block is not None and self.highlighted_block.next_block != self:
                         self.next_block = self.highlighted_block.next_block
                         self.highlighted_block.next_block.prev_block = self
@@ -364,6 +500,10 @@ class Block(QGraphicsPathItem):
             'АЗапись': 'analogWrite({}, {});',
             'Читать\nсерийный порт': 'Serial.read();',
             'Запись\nв серийный порт': 'Serial.write("{}");'}
+<<<<<<< HEAD:tetete_seva.py
+=======
+        print(self.text)
+>>>>>>> 424e1594d11f060767611a0369a5caa72386c6be:tetete.py
         command = command_mapping.get(self.text, '')
         code_lines = [command]
         if self.next_block:
@@ -1029,10 +1169,6 @@ class AnalogWriteBlock(Block):
 
     def generate_code(self):
         program = super().generate_code()
-        if self.combo_box.currentText == "ON":
-            text = "HIGH"
-        else:
-            text = "LOW"
         program = program.format(self.text_field1.text(), self.text_field2.text())
         return program
 
@@ -1123,7 +1259,11 @@ class BlockPalette(QWidget):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         self.parent = parent
+<<<<<<< HEAD:tetete_seva.py
         blocks = ['Начало', 'Переменные', 'Арифметика', 'Сон', 'Условие', 'Повтор', 'Цикл', 'ЦЧтение', 'АЧтение', 'ЦЗапись',
+=======
+        blocks = ['Начало', 'Переменные', 'Сон', 'Условие', 'Повтор', 'ЦЧтение', 'АЧтение', 'ЦЗапись',
+>>>>>>> 424e1594d11f060767611a0369a5caa72386c6be:tetete.py
                   'АЗапись', 'Читать\nсерийный порт', 'Запись\nв серийный порт']
         colors = [
             QColor('#ff3386'),
@@ -1221,11 +1361,19 @@ class MainWindow(QWidget):
             return
 
         rudiron_code = block[0].generate_code()
+<<<<<<< HEAD:tetete_seva.py
         print(rudiron_code)
+=======
+>>>>>>> 424e1594d11f060767611a0369a5caa72386c6be:tetete.py
         # Display or execute the code
         QMessageBox.information(
             self, "Program", f"Ваша программа успешно сгенерированна!")
         # Here you can add code to send 'rudiron_code' to the Rudiron controller
+        rendered_rudiron_code = f"void setup() {{{rudiron_code}}}"
+        print(rendered_rudiron_code)
+        file = open("temp.ino", "w")
+        file.write(rendered_rudiron_code)
+        file.close()
 
 
 if __name__ == '__main__':
