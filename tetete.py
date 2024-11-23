@@ -78,19 +78,19 @@ class Block(QGraphicsPathItem):
             # Store the scene positions
             self.initial_positions[block] = block.mapToScene(QPointF(0, 0))
 
-        # Disconnect from previous and next blocks depending on where the block is grabbed
-        if self.dragging_from_top:
-            if self.prev_block:
-                self.prev_block.next_block = None
-                self.prev_block = None
-        else:
-            if self.next_block:
-                self.next_block.prev_block = None
-                self.next_block = None
+        # # Disconnect from previous and next blocks depending on where the block is grabbed
+        # if self.dragging_from_top:
+        #     if self.prev_block:
+        #         self.prev_block.next_block = None
+        #         self.prev_block = None
+        # else:
+        #     if self.next_block:
+        #         self.next_block.prev_block = None
+        #         self.next_block = None
 
-        # If the block is inside a control block, we need to detach it temporarily
-        if self.parent_block:
-            self.parent_block.remove_child_block(self)
+        # # If the block is inside a control block, we need to detach it temporarily
+        # if self.parent_block:
+        #     self.parent_block.remove_child_block(self)
 
         super().mousePressEvent(event)
 
@@ -155,6 +155,7 @@ class Block(QGraphicsPathItem):
                     stack.append(block.prev_block)
                 if block.next_block:
                     stack.append(block.next_block)
+        print(len(blocks))
         return blocks
 
     def check_for_snap(self):
@@ -226,15 +227,18 @@ class Block(QGraphicsPathItem):
 
             # Disconnect any existing connections
             # Only disconnect if not snapping into a control block
-            if not (isinstance(self.highlighted_block, ControlBlock) and self.highlighted_block.is_open_area(self.scenePos())):
-                self.disconnect_blocks()
+            # if not (isinstance(self.highlighted_block, ControlBlock) and self.highlighted_block.is_open_area(self.scenePos())):
+            #     self.disconnect_blocks()
 
             if isinstance(self.highlighted_block, ControlBlock) and self.highlighted_block.is_open_area(self.scenePos()):
                 # Snap into the control block
+                if len(self.highlighted_block.child_blocks):
+                    self.highlighted_block.child_blocks[-1].next_block = self
+                    self.prev_block = self.highlighted_block.child_blocks[-1]
                 self.highlighted_block.add_child_blocks(self)
             else:
                 if self.dragging_from_top and self.is_near(self.highlighted_block, above=True):
-                    if self.highlighted_block.prev_block is not None:
+                    if self.highlighted_block.prev_block is not None and self.highlighted_block.prev_block != self:
                         self.prev_block = self.highlighted_block.prev_block
                         self.highlighted_block.prev_block.next_block = self
                         self.prev_block.move_up(self.boundingRect().height())
@@ -253,7 +257,7 @@ class Block(QGraphicsPathItem):
                         prev_block = prev_block.prev_block
                 elif not self.dragging_from_top and self.is_near(self.highlighted_block, below=True):
                     print(self.highlighted_block)
-                    if self.highlighted_block.next_block is not None:
+                    if self.highlighted_block.next_block is not None and self.highlighted_block.next_block != self:
                         self.next_block = self.highlighted_block.next_block
                         self.highlighted_block.next_block.prev_block = self
                         self.next_block.move_down(self.boundingRect().height(), False)
@@ -354,6 +358,7 @@ class Block(QGraphicsPathItem):
         return '\n'.join(code_lines)
 
     def suicide(self):
+        self.disconnect_blocks()
         self.scene().removeItem(self)
 
 class ControlBlock(Block):
