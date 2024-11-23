@@ -231,6 +231,10 @@ class Block(QGraphicsPathItem):
             else:
                 if self.dragging_from_top and self.is_near(self.highlighted_block, above=True):
                     # Snap the bottom of self to the top of the highlighted block
+                    if self.highlighted_block.prev_block is not None:
+                        self.prev_block = self.highlighted_block.prev_block
+                        self.highlighted_block.prev_block.next_block = self
+                        self.prev_block.move_up(self.boundingRect().height())
                     self.next_block = self.highlighted_block
                     self.highlighted_block.prev_block = self
                     
@@ -244,6 +248,11 @@ class Block(QGraphicsPathItem):
                             prev_block.parent_block.add_child_blocks(self)
                         prev_block = prev_block.prev_block
                 elif not self.dragging_from_top and self.is_near(self.highlighted_block, below=True):
+                    if self.highlighted_block.next_block is not None:
+                        self.next_block = self.highlighted_block
+                        self.highlighted_block.prev_block = self
+                        self.next_block.move_down(self.boundingRect().height())
+
                     # Snap the top of self to the bottom of the highlighted block
                     self.prev_block = self.highlighted_block
                     self.highlighted_block.next_block = self
@@ -263,7 +272,26 @@ class Block(QGraphicsPathItem):
             # If not snapped to anything, ensure the block is standalone
             pass  # Do not disconnect here to maintain existing connections
     
+    def move_up(self, delta_y=20):
+            """
+            Moves the block upward by delta_y pixels.
+            Also moves all connected previous blocks accordingly.
+            """
+            if self.parent_block:
+                # If the block is nested inside a control block, move the entire control block
+                self.parent_block.move_up(delta_y)
+                return
 
+            # Move this block
+            current_pos = self.scenePos()
+            new_pos = QPointF(current_pos.x(), current_pos.y() - delta_y)
+            self.setPos(new_pos)
+
+            # Move connected next blocks
+            if self.prev_block:
+                self.prev_block.move_up(delta_y)
+
+    
     def move_down(self, delta_y=20):
         """
         Moves the block downward by delta_y pixels.

@@ -12,8 +12,7 @@ class Block(QGraphicsPathItem):
         super().__init__(parent)
         self.text = text
         self.color = color
-        self.width = 160
-        self.height = 40
+        self.initUI()
         self.setFlags(
             QGraphicsItem.GraphicsItemFlag.ItemIsSelectable |
             QGraphicsItem.GraphicsItemFlag.ItemIsMovable
@@ -26,13 +25,34 @@ class Block(QGraphicsPathItem):
         self.initial_positions = {}
         self.setZValue(1)  # Ensure blocks are above the background
 
-    def initUI(self, width=None, height=None):
+        # Add changeable text field (QLineEdit)
+        self.text_field = QLineEdit()
+        self.text_field.setText(self.text)
+        self.text_field.setFont(QFont('Arial', 10))
+        self.text_field.setFixedWidth(100)
+
+        self.text_field_proxy = QGraphicsProxyWidget(self)
+        self.text_field_proxy.setWidget(self.text_field)
+        self.text_field_proxy.setParentItem(self)
+        self.text_field_proxy.setPos(10, 10)
+
+        # Add combo box
+        self.combo_box = QComboBox()
+        self.combo_box.addItems(['Option 1', 'Option 2', 'Option 3'])
+        self.combo_box.setFont(QFont('Arial', 10))
+
+        self.combo_box_proxy = QGraphicsProxyWidget(self)
+        self.combo_box_proxy.setWidget(self.combo_box)
+        self.combo_box_proxy.setParentItem(self)
+        self.combo_box_proxy.setPos(10, 30)
+
+    def initUI(self):
         path = QPainterPath()
-        width = self.width
-        height = self.height
-        notch_size = 5
+        width = 120
+        height = 40
+        notch_size = 10
         tab_width = 20
-        tab_height = 5
+        tab_height = 10
 
         # Create the block shape with a top notch and bottom tab
         path.moveTo(0, notch_size)
@@ -54,12 +74,12 @@ class Block(QGraphicsPathItem):
         self.setPen(QPen(Qt.GlobalColor.black))
 
         # Add text
-        # self.text_item = QGraphicsTextItem(self.text, self)
-        # font = QFont('Arial', 12)
-        # self.text_item.setFont(font)
-        # text_rect = self.text_item.boundingRect()
-        # self.text_item.setPos(
-        #     (width - text_rect.width()) / 2, (height - text_rect.height()) / 2)
+        self.text_item = QGraphicsTextItem(self.text, self)
+        font = QFont('Arial', 12)
+        self.text_item.setFont(font)
+        text_rect = self.text_item.boundingRect()
+        self.text_item.setPos(
+            (width - text_rect.width()) / 2, (height - text_rect.height()) / 2)
 
     def mousePressEvent(self, event):
         # Set focus to the workspace
@@ -299,175 +319,9 @@ class Block(QGraphicsPathItem):
             code_lines.append(self.next_block.generate_code())
         return '\n'.join(code_lines)
 
-class PINBlock(Block):
-    def __init__(self, text, color, parent=None):
-        super().__init__(text, color, parent)
-        self.child_blocks = []
-        # self.width = 120
-        self.setZValue(1)  # Control blocks are below child blocks
-        self.initUI()
-
-    def initUI(self):
-        super().initUI()
-        width = self.width
-        height = self.height
-        delta = 5
-
-        # Add text
-        print("Pin")
-        self.text_item = QGraphicsTextItem("PIN", self)
-        font = QFont('Arial', 10)
-        self.text_item.setFont(font)
-        text_rect = self.text_item.boundingRect()
-        self.text_item.setPos(delta * 2, (height - text_rect.height()) / 2)
-
-        #
-        self.text_field = QLineEdit()
-        self.text_field.setFont(QFont('Arial', 10))
-        self.text_field.setFixedWidth(50)
-        self.text_field_proxy = QGraphicsProxyWidget(self)
-        self.text_field_proxy.setWidget(self.text_field)
-        self.text_field_proxy.setParentItem(self)
-        text_rect_2 = self.text_field_proxy.boundingRect()
-        self.text_field_proxy.setPos(int(delta * 2 + text_rect.width() + delta), (self.height - text_rect_2.height()) / 2)
-
-        # Add combo box
-        self.combo_box = QComboBox()
-        self.combo_box.addItems(['ON', 'OFF'])
-        self.combo_box.setFont(QFont('Arial', 8))
-        self.combo_box_proxy = QGraphicsProxyWidget(self)
-        self.combo_box_proxy.setWidget(self.combo_box)
-        text_rect_3 = self.combo_box_proxy.boundingRect()
-        self.combo_box_proxy.setParentItem(self)
-        self.combo_box_proxy.setPos(delta * 2 + text_rect.width() + delta + text_rect_2.width() + delta, (self.height - text_rect_2.height()) / 2)
-
-class VariableBlock(Block):
-    def __init__(self, text, color, parent=None):
-        super().__init__(text, color, parent)
-        self.child_blocks = []
-        self.setZValue(1)  # Control blocks are below child blocks
-        self.initUI()
-
-    def initUI(self):
-        super().initUI()
-        width = self.width
-        height = self.height
-        delta = 5
-
-        #
-        self.text_field = QLineEdit()
-        self.text_field.setFont(QFont('Arial', 10))
-        self.text_field.setFixedWidth(50)
-        self.text_field_proxy = QGraphicsProxyWidget(self)
-        self.text_field_proxy.setWidget(self.text_field)
-        self.text_field_proxy.setParentItem(self)
-        text_rect = self.text_field_proxy.boundingRect()
-        self.text_field_proxy.setPos(delta * 3, (height - text_rect.height()) / 2)
-
-        # Add text
-        print("Var")
-        self.text_item = QGraphicsTextItem("=", self)
-        font = QFont('Arial', 16)
-        self.text_item.setFont(font)
-        text_rect_1 = self.text_item.boundingRect()
-        self.text_item.setPos(delta * 2 + text_rect.width() + delta * 2, (height - text_rect_1.height()) / 2)
-
-        #
-        self.text_field = QLineEdit()
-        self.text_field.setFont(QFont('Arial', 10))
-        self.text_field.setFixedWidth(50)
-        self.text_field_proxy = QGraphicsProxyWidget(self)
-        self.text_field_proxy.setWidget(self.text_field)
-        self.text_field_proxy.setParentItem(self)
-        text_rect_2 = self.text_field_proxy.boundingRect()
-        self.text_field_proxy.setPos(delta * 2 + text_rect.width() + int(delta * 2 * 1.5) + text_rect_1.width(), (self.height - text_rect_2.height()) / 2)
-
-class DelayBlock(Block):
-    def __init__(self, text, color, parent=None):
-        super().__init__(text, color, parent)
-        self.initDelayUI()
-
-    def initDelayUI(self):
-        self.initUI()
-        self.notch_size = 10
-        self.tab_width = 20
-        self.tab_height = 10
-
-        # Add text Сон
-        self.text_item = QGraphicsTextItem("Сон", self)
-        font = QFont('Arial', 12)
-        self.text_item.setFont(font)
-        text_rect = self.text_item.boundingRect()
-        self.text_item.setPos(
-            (self.width - text_rect.width()) / 5, (self.height - text_rect.height()) / 2)
-
-        # Add changeable text field (QLineEdit)
-        self.text_field = QLineEdit()
-        self.text_field.setFont(QFont('Arial', 10))
-        self.text_field.setFixedWidth(30)
-
-        self.text_field_proxy = QGraphicsProxyWidget(self)
-        self.text_field_proxy.setWidget(self.text_field)
-        text_rect = self.text_field_proxy.boundingRect()
-        self.text_field_proxy.setParentItem(self)
-        self.text_field_proxy.setPos(
-            (self.width - text_rect.width()) / 5 * 3.5, (self.height - text_rect.height()) / 2)
-
-
-
-
-class ConditionBlock(Block):
-    def __init__(self, text, color, parent=None):
-        super().__init__(text, color, parent)
-        self.initConditionUI()
-
-    def initConditionUI(self):
-        self.initUI()
-        self.notch_size = 10
-        self.tab_width = 20
-        self.tab_height = 10
-
-        # Add changeable text field (QLineEdit)
-        self.text_field = QLineEdit()
-        self.text_field.setFont(QFont('Arial', 10))
-        self.text_field.setFixedWidth(30)
-
-        self.text_field_proxy = QGraphicsProxyWidget(self)
-        self.text_field_proxy.setWidget(self.text_field)
-        text_rect = self.text_field_proxy.boundingRect()
-        self.text_field_proxy.setParentItem(self)
-        self.text_field_proxy.setPos(
-            (self.width - text_rect.width()) / 10, (self.height - text_rect.height()) / 2)
-
-       #Add combo box
-        self.combo_box = QComboBox()
-        self.combo_box.addItems(['==', '!=', '>', '<'])
-        self.combo_box.setFont(QFont('Arial', 10))
-
-        self.combo_box_proxy = QGraphicsProxyWidget(self)
-        self.combo_box_proxy.setWidget(self.combo_box)
-        text_rect = self.combo_box_proxy.boundingRect()
-        self.combo_box_proxy.setParentItem(self)
-        self.combo_box_proxy.setPos(
-            (self.width - text_rect.width()) / 2, (self.height - text_rect.height()) / 2)
-
-        # Add changeable text field (QLineEdit)
-        self.text_field = QLineEdit()
-        self.text_field.setFont(QFont('Arial', 10))
-        self.text_field.setFixedWidth(30)
-
-        self.text_field_proxy = QGraphicsProxyWidget(self)
-        self.text_field_proxy.setWidget(self.text_field)
-        text_rect = self.text_field_proxy.boundingRect()
-        self.text_field_proxy.setParentItem(self)
-        self.text_field_proxy.setPos(
-            (self.width - text_rect.width()) / 10 * 9, (self.height - text_rect.height()) / 2)
-
-
 class ControlBlock(Block):
     def __init__(self, text, color, parent=None):
         super().__init__(text, color, parent)
-
         self.child_blocks = []
         self.initControlUI()
         self.setZValue(0)  # Control blocks are below child blocks
@@ -587,7 +441,7 @@ class ControlBlock(Block):
 
     def generate_code(self):
         code_lines = []
-        if self.text == 'Повтор':
+        if self.text == 'Repeat':
             code_lines.append('for i in range(10):')
             for child in self.child_blocks:
                 child_code = child.generate_code()
@@ -639,7 +493,7 @@ class BlockPalette(QWidget):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         self.parent = parent
-        blocks = ['PIN', 'Переменные', 'Сон', 'Условие', 'Повтор']
+        blocks = ['Move Forward', 'Turn Left', 'Turn Right', 'Play Sound', 'Repeat']
         colors = [
             QColor('#FF5733'),
             QColor('#33FF57'),
@@ -657,16 +511,10 @@ class BlockPalette(QWidget):
             layout.addWidget(button)
 
     def add_block_to_workspace(self, text, color):
-        if text == 'Повтор':
+        if text == 'Repeat':
             block = ControlBlock(text, color)
-        elif text == 'Сон':
-            block = DelayBlock(text, color)
-        elif text == 'Условие':
-            block = ConditionBlock(text, color)
-        elif text == 'PIN':
-            block = PINBlock(text, color)
-        elif text == 'Переменные':
-            block = VariableBlock(text, color)
+        else:
+            block = Block(text, color)
         self.parent.workspace.scene().addItem(block)
         block.setPos(100, 100)
 
