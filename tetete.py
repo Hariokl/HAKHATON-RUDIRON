@@ -256,7 +256,7 @@ class Block(QGraphicsPathItem):
                     if self.highlighted_block.next_block is not None:
                         self.next_block = self.highlighted_block.next_block
                         self.highlighted_block.next_block.prev_block = self
-                        self.next_block.move_down(self.boundingRect().height())
+                        self.next_block.move_down(self.boundingRect().height(), False)
                     # Snap the top of self to the bottom of the highlighted block
                     self.prev_block = self.highlighted_block
                     self.highlighted_block.next_block = self
@@ -268,20 +268,21 @@ class Block(QGraphicsPathItem):
                     prev_block = self.prev_block
                     while prev_block is not None:
                         if prev_block.parent_block is not None:
+                            print("ГОЙДА!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
                             prev_block.parent_block.add_child_blocks(self)
-                        prev_block = prev_block.prev_block
+                        prev_block = prev_block.parent_block
 
             self.highlighted_block = None
         else:
             # If not snapped to anything, ensure the block is standalone
             pass  # Do not disconnect here to maintain existing connections
 
-    def move_up(self, delta_y=20):
+    def move_up(self, delta_y=20, move_parent_block=False):
             """
             Moves the block upward by delta_y pixels.
             Also moves all connected previous blocks accordingly.
             """
-            if self.parent_block:
+            if self.parent_block and move_parent_block:
                 # If the block is nested inside a control block, move the entire control block
                 self.parent_block.move_up(delta_y)
                 return
@@ -292,16 +293,16 @@ class Block(QGraphicsPathItem):
             self.setPos(new_pos)
 
             # Move connected next blocks
-            if self.prev_block:
+            if self.prev_block is not None:
                 self.prev_block.move_up(delta_y)
 
 
-    def move_down(self, delta_y=20):
+    def move_down(self, delta_y=20, move_parent_block=False):
         """
         Moves the block downward by delta_y pixels.
         Also moves all connected next blocks accordingly.
         """
-        if self.parent_block:
+        if self.parent_block and move_parent_block:
             # If the block is nested inside a control block, move the entire control block
             self.parent_block.move_down(delta_y)
             return
@@ -550,7 +551,7 @@ class ControlBlock(Block):
             blk.setZValue(1)  # Child blocks are above control blocks
         self.update_size()
         if self.next_block is not None:
-            self.next_block.move_down(block.boundingRect().height())
+            self.next_block.move_down(block.boundingRect().height(), False)
 
     def remove_child_block(self, block):
         # Remove a block from child_blocks
@@ -581,6 +582,7 @@ class ControlBlock(Block):
         y_offset = 40
         for child in self.child_blocks:
             child.setPos(abs(self.width - child.width) // 2, y_offset)
+
             y_offset += child.boundingRect().height()
             # If child is a ControlBlock, ensure it repositions its children
             if isinstance(child, ControlBlock):
@@ -649,7 +651,7 @@ class ConditionBlock(ControlBlock):
         self.combo_box_proxy.setParentItem(self)
         self.combo_box_proxy.setPos(
             (self.width - text_rect.width()) / 2, (text_rect.height()) / 2)
-
+        self.combo_box_proxy.setZValue(2)
         # Add changeable text field (QLineEdit)
         self.text_field = QLineEdit()
         self.text_field.setFont(QFont('Arial', 10))
