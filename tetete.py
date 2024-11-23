@@ -2,7 +2,7 @@ import sys
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QGraphicsView, QGraphicsScene, QGraphicsItem,
     QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMessageBox, QGraphicsTextItem,
-    QGraphicsPathItem, QLineEdit, QGraphicsProxyWidget, QComboBox
+    QGraphicsPathItem, QLineEdit, QGraphicsProxyWidget, QComboBox, QScrollArea
 )
 from PyQt6.QtGui import QBrush, QColor, QPen, QPainterPath, QFont, QPainter, QIcon
 from PyQt6.QtCore import Qt, QRectF, QPointF
@@ -1120,9 +1120,12 @@ class Workspace(QGraphicsView):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setScene(QGraphicsScene(self))
-        self.setSceneRect(0, 0, 800, 600)
+        self.setSceneRect(-2000, -2000, 4000, 4000)
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
+        self._pan = False
+        self._last_pan_point = QPointF()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Delete:
@@ -1134,6 +1137,33 @@ class Workspace(QGraphicsView):
             event.accept()
         else:
             super().keyPressEvent(event)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.MiddleButton:
+            self._pan = True
+            self.setCursor(Qt.CursorShape.ClosedHandCursor)
+            self._last_pan_point = event.pos()
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._pan:
+            delta = self.mapToScene(event.pos()) - self.mapToScene(self._last_pan_point)
+            self._last_pan_point = event.pos()
+            self.setTransformationAnchor(QGraphicsView.ViewportAnchor.NoAnchor)
+            self.translate(-delta.x(), -delta.y())
+            event.accept()
+        else:
+            super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.MiddleButton:
+            self._pan = False
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+            event.accept()
+        else:
+            super().mouseReleaseEvent(event)
 
 class BlockPalette(QWidget):
     def __init__(self, parent=None):
@@ -1224,6 +1254,41 @@ class MainWindow(QWidget):
         main_layout.addLayout(left_layout)
         main_layout.addWidget(self.workspace)
 
+        # Right Side Bar
+        right_widget = QWidget()
+        right_layout = QVBoxLayout(right_widget)
+        right_layout.addWidget(QLabel('<h2>DPins</h2>'))
+
+        pin_numbers = list(range(0, 18)) + [20] + list(range(28, 36))
+        self.pin_comboboxes = {}
+        for pin_number in pin_numbers:
+            h_layout = QHBoxLayout()
+            label = QLabel(f"Pin{pin_number}")
+            combobox = QComboBox()
+            combobox.addItems(["INPUT", "OUTPUT"])
+            self.pin_comboboxes[pin_number] = combobox
+            h_layout.addWidget(label)
+            h_layout.addWidget(combobox)
+            right_layout.addLayout(h_layout)
+
+        right_layout.addStretch()
+
+        right_scroll_area = QScrollArea()
+        right_scroll_area.setWidgetResizable(True)
+        right_scroll_area.setWidget(right_widget)
+        right_scroll_area.setMinimumWidth(150)
+
+        right_scroll_area.setFixedWidth(200)
+        right_scroll_area.setFixedHeight(400)
+
+        # Arrange layouts
+        main_layout.addLayout(left_layout)
+        main_layout.addWidget(self.workspace)
+        main_layout.addWidget(right_scroll_area)
+
+        self.setLayout(main_layout)
+
+
     def run_program(self):
         # Find all top-level blocks
         block = [item for item in self.workspace.scene().items()
@@ -1240,9 +1305,8 @@ class MainWindow(QWidget):
         # Here you can add code to send 'rudiron_code' to the Rudiron controller
         rendered_rudiron_code = f"void setup() {{{rudiron_code}}}"
         print(rendered_rudiron_code)
-        file = open("temp.ino", "w")
-        file.write(rendered_rudiron_code)
-        file.close()
+        with open("temp.ino", "w") as file:
+            file.write(rendered_rudiron_code)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
