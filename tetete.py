@@ -318,7 +318,7 @@ class Block(QGraphicsPathItem):
         Moves the block downward by delta_y pixels.
         Also moves all connected next blocks accordingly.
         """
-        if self.parent_block:
+        if self.parent_block and move_parent_block:
             # If the block is nested inside a control block, move the entire control block
             self.parent_block.move_down(delta_y)
             return
@@ -468,6 +468,7 @@ class ControlBlock(Block):
         y_offset = 40
         for child in self.child_blocks:
             child.setPos(abs(self.width - child.width) // 2, y_offset)
+
             y_offset += child.boundingRect().height()
             # If child is a ControlBlock, ensure it repositions its children
             if isinstance(child, ControlBlock):
@@ -696,7 +697,6 @@ class ConditionBlock(ControlBlock):
         self.combo_box_proxy.setPos(
             (self.width - text_rect.width()) / 2, (text_rect.height()) / 2)
         self.combo_box_proxy.setZValue(2)
-
         # Add changeable text field (QLineEdit)
         self.text_field2 = QLineEdit()
         self.text_field2.setFont(QFont('Arial', 10))
