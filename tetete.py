@@ -870,7 +870,7 @@ class MainWindow(QWidget):
 
         rudiron_code = block[0].generate_code()
         print("void main(){")
-        print(rudiron_code, end='}', split="")
+        print(rudiron_code, end='}', sep="")
         # Display or execute the code
         QMessageBox.information(
             self, "Program", f"Ваша программа успешно сгенерированна!")
