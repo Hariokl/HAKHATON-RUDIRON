@@ -340,12 +340,12 @@ class Block(QGraphicsPathItem):
             'Переменные': 'auto {} = {};',
             'Условие': 'if ({} {} {})',
             'Повтор': 'for (int i = 0; i < {n}; ++i)',
-            'ЦЧтение': 'digitalRead({})',
-            'АЧтение': 'analogRead({})',
-            'ЦЗапись': 'digitalWrite({}, {})',
-            'АЗапись': 'analogWrite({}, {})',
-            'Читать\nсерийный порт': 'Serial.read()',
-            'Запись\nв серийный порт': 'Serial.write({})'}
+            'ЦЧтение': 'digitalRead({});',
+            'АЧтение': 'analogRead({});',
+            'ЦЗапись': 'digitalWrite({}, {});',
+            'АЗапись': 'analogWrite({}, {});',
+            'Читать\nсерийный порт': 'Serial.read();',
+            'Запись\nв серийный порт': 'Serial.write("{}");'}
         print(self.text)
         command = command_mapping.get(self.text, '')
         code_lines = [command]
@@ -1040,10 +1040,6 @@ class AnalogWriteBlock(Block):
 
     def generate_code(self):
         program = super().generate_code()
-        if self.combo_box.currentText == "ON":
-            text = "HIGH"
-        else:
-            text = "LOW"
         program = program.format(self.text_field1.text(), self.text_field2.text())
         return program
 
@@ -1173,8 +1169,6 @@ class BlockPalette(QWidget):
             block = DelayBlock(text, color)
         elif text == 'Условие':
             block = ConditionBlock(text, color)
-        elif text == 'PIN':
-            block = PINBlock(text, color)
         elif text == 'Переменные':
             block = VariableBlock(text, color)
         elif text == 'ЦЧтение':
@@ -1235,12 +1229,15 @@ class MainWindow(QWidget):
             return
 
         rudiron_code = block[0].generate_code()
-        print("void main(){")
-        print(rudiron_code, end='}', sep="")
         # Display or execute the code
         QMessageBox.information(
             self, "Program", f"Ваша программа успешно сгенерированна!")
         # Here you can add code to send 'rudiron_code' to the Rudiron controller
+        rendered_rudiron_code = f"void setup() {{{rudiron_code}}}"
+        print(rendered_rudiron_code)
+        file = open("temp.ino", "w")
+        file.write(rendered_rudiron_code)
+        file.close()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
