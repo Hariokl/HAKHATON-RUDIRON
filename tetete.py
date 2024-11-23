@@ -566,8 +566,8 @@ class PINBlock(Block):
         self.combo_box_proxy.setPos(delta * 2 + text_rect.width() + delta + text_rect_2.width() + delta, (self.height - text_rect_2.height()) / 2)
 
     def generate_code(self):
-        program = 'digitalWrite({}, {});'
-        if self.combo_box.currentText == "ON":
+        program = 'digitalWrite({}, {});\n'
+        if self.combo_box.currentText() == "ON":
             text = "HIGH"
         else:
             text = "LOW"
@@ -618,7 +618,7 @@ class VariableBlock(Block):
         self.text_field_proxy.setPos(delta * 2 + text_rect.width() + int(delta * 2 * 1.5) + text_rect_1.width(), (self.height - text_rect_2.height()) / 2)
 
     def generate_code(self):
-        program = 'auto {} = {};'
+        program = 'auto {} = {};\n'
         program = program.format(self.text_field1.text(), self.text_field2.text())
         if self.next_block:
             return program + self.next_block.generate_code()
@@ -656,7 +656,7 @@ class DelayBlock(Block):
             (self.width - text_rect.width()) / 5 * 3.5, (self.height - text_rect.height()) / 2)
 
     def generate_code(self):
-        program = 'delay({});'
+        program = 'delay({});\n'
         program = program.format(self.text_field.text())
         if self.next_block:
             return program + self.next_block.generate_code()
@@ -712,10 +712,10 @@ class ConditionBlock(ControlBlock):
     def generate_code(self):
         program = 'if ({} {} {})'
         program = program.format(self.text_field.text(), self.combo_box.currentText(), self.text_field2.text())
-        program += '{'
+        program += '{\n'
         for child in self.child_blocks:
             program += child.generate_code()
-        program += '}'
+        program += '}\n'
         print("If", self.next_block)
         if self.next_block:
             return program + self.next_block.generate_code()
@@ -761,10 +761,10 @@ class ForCycleBlock(ControlBlock):
     def generate_code(self):
         program = 'for (int i = 0; i < {}; ++i)'
         program = program.format(self.text_field2.text())
-        program += '{'
+        program += '{\n'
         for child in self.child_blocks:
             program += child.generate_code()
-        program += '}'
+        program += '}\n'
         if self.next_block:
             return program + self.next_block.generate_code()
         return program
@@ -869,7 +869,8 @@ class MainWindow(QWidget):
             return
 
         rudiron_code = block[0].generate_code()
-        print(rudiron_code)
+        print("void main(){")
+        print(rudiron_code, end='}', split="")
         # Display or execute the code
         QMessageBox.information(
             self, "Program", f"Ваша программа успешно сгенерированна!")
