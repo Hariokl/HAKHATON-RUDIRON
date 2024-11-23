@@ -330,6 +330,37 @@ class Block(QGraphicsPathItem):
             code_lines.append(self.next_block.generate_code())
         return '\n'.join(code_lines)
 
+    def suicide(self):
+        self.scene().removeItem(self)
+
+class StartBlock(Block):
+    start_block = None
+
+    def __init__(self, text, color, parent=None):
+        if StartBlock.start_block is not None:
+            StartBlock.start_block.suicide()
+            StartBlock.start_block = None
+        super().__init__(text, color, parent)
+        self.child_blocks = []
+        # self.width = 120
+        self.setZValue(1)  # Control blocks are below child blocks
+        self.initUI()
+        StartBlock.start_block = self
+
+    def initUI(self):
+        super().initUI()
+        width = self.width
+        height = self.height
+        delta = 5
+
+        # Add text
+        print("Pin")
+        self.text_item = QGraphicsTextItem("Начало", self)
+        font = QFont('Arial', 20)
+        self.text_item.setFont(font)
+        text_rect = self.text_item.boundingRect()
+        self.text_item.setPos((self.width - text_rect.width()) // 2, (height - text_rect.height()) / 2)
+
 class PINBlock(Block):
     def __init__(self, text, color, parent=None):
         super().__init__(text, color, parent)
@@ -649,6 +680,7 @@ class ConditionBlock(ControlBlock):
         self.combo_box_proxy.setParentItem(self)
         self.combo_box_proxy.setPos(
             (self.width - text_rect.width()) / 2, (text_rect.height()) / 2)
+        self.combo_box_proxy.setZValue(2)
 
         # Add changeable text field (QLineEdit)
         self.text_field = QLineEdit()
@@ -672,12 +704,11 @@ class Workspace(QGraphicsView):
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Delete:
-            print("1111111111111111")
             selected_items = self.scene().selectedItems()
             for item in selected_items:
                 if isinstance(item, Block) or isinstance(item, ControlBlock):
                     # Remove the item from the scene
-                    self.scene().removeItem(item)
+                    item.suicide()
             event.accept()
         else:
             super().keyPressEvent(event)
@@ -687,8 +718,9 @@ class BlockPalette(QWidget):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         self.parent = parent
-        blocks = ['PIN', 'Переменные', 'Сон', 'Условие', 'Повтор']
+        blocks = ['Начало', 'PIN', 'Переменные', 'Сон', 'Условие', 'Повтор']
         colors = [
+            QColor('#ff3386'),
             QColor('#FF5733'),
             QColor('#33FF57'),
             QColor('#3357FF'),
@@ -707,6 +739,8 @@ class BlockPalette(QWidget):
     def add_block_to_workspace(self, text, color):
         if text == 'Повтор':
             block = ControlBlock(text, color)
+        elif text == 'Начало':
+            block = StartBlock(text, color)
         elif text == 'Сон':
             block = DelayBlock(text, color)
         elif text == 'Условие':
