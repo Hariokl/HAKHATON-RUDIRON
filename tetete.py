@@ -93,6 +93,20 @@ class Block(QGraphicsPathItem):
         #     self.parent_block.remove_child_block(self)
 
         super().mousePressEvent(event)
+    
+    
+    def find_head(self):
+        head = self
+        while head.prev_block:
+            head = head.prev_block
+        return head
+    
+    def find_tail(self):
+        tail = self
+        while tail.next_block:
+            tail = tail.next_block
+        return tail
+    
 
     def mouseMoveEvent(self, event):
         super().mouseMoveEvent(event)
@@ -113,8 +127,10 @@ class Block(QGraphicsPathItem):
                     block.setPos(parent_pos)
                 else:
                     block.setPos(initial_pos + delta)
-
-        self.check_for_snap()
+        head, tail = self.find_head(), self.find_tail()
+        head.check_for_snap()
+        tail.check_for_snap()
+        # self.check_for_snap()
 
     def mouseReleaseEvent(self, event):
         super().mouseReleaseEvent(event)
@@ -168,7 +184,8 @@ class Block(QGraphicsPathItem):
         colliding_items = self.scene().collidingItems(self)
 
         # Filter out child items and self
-        colliding_items = [item for item in colliding_items if item != self and not self.is_descendant_of(item)]
+        connected_blocks = self.get_all_connected_blocks()
+        colliding_items = [item for item in colliding_items if item != self and not self.is_descendant_of(item) and item not in connected_blocks]
 
         for item in colliding_items:
             if isinstance(item, ControlBlock):
@@ -1144,7 +1161,7 @@ class BlockPalette(QWidget):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         self.parent = parent
-        blocks = ['Начало', 'PIN', 'Переменные', 'Сон', 'Условие', 'Повтор', 'ЦЧтение', 'АЧтение', 'ЦЗапись',
+        blocks = ['Начало', 'Переменные', 'Сон', 'Условие', 'Повтор', 'ЦЧтение', 'АЧтение', 'ЦЗапись',
                   'АЗапись', 'Читать\nсерийный порт', 'Запись\nв серийный порт']
         colors = [
             QColor('#ff3386'),
