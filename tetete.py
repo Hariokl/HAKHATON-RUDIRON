@@ -138,44 +138,6 @@ class Block(QGraphicsPathItem):
         if self.parent_block:
             self.parent_block.remove_child_block(self)
             self.parent_block = None
-    def move_up(self, delta_y=20):
-            """
-            Moves the block upward by delta_y pixels.
-            Also moves all connected previous blocks accordingly.
-            """
-            if self.parent_block:
-                # If the block is nested inside a control block, move the entire control block
-                self.parent_block.move_up(delta_y)
-                return
-
-            # Move this block
-            current_pos = self.scenePos()
-            new_pos = QPointF(current_pos.x(), current_pos.y() - delta_y)
-            self.setPos(new_pos)
-
-            # Move connected next blocks
-            if self.prev_block:
-                self.prev_block.move_up(delta_y)
-
-    
-    def move_down(self, delta_y=20):
-        """
-        Moves the block downward by delta_y pixels.
-        Also moves all connected next blocks accordingly.
-        """
-        if self.parent_block:
-            # If the block is nested inside a control block, move the entire control block
-            self.parent_block.move_down(delta_y)
-            return
-
-        # Move this block
-        current_pos = self.scenePos()
-        new_pos = QPointF(current_pos.x(), current_pos.y() + delta_y)
-        self.setPos(new_pos)
-
-        # Move connected next blocks
-        if self.next_block:
-            self.next_block.move_down(delta_y)
 
     def get_all_connected_blocks(self):
         # Get all connected blocks (both prev and next, and child blocks)
@@ -203,6 +165,7 @@ class Block(QGraphicsPathItem):
 
         # Highlight potential snap targets
         colliding_items = self.scene().collidingItems(self)
+
         # Filter out child items and self
         colliding_items = [item for item in colliding_items if item != self and not self.is_descendant_of(item)]
 
@@ -313,6 +276,26 @@ class Block(QGraphicsPathItem):
             # If not snapped to anything, ensure the block is standalone
             pass  # Do not disconnect here to maintain existing connections
 
+    def move_up(self, delta_y=20):
+            """
+            Moves the block upward by delta_y pixels.
+            Also moves all connected previous blocks accordingly.
+            """
+            if self.parent_block:
+                # If the block is nested inside a control block, move the entire control block
+                self.parent_block.move_up(delta_y)
+                return
+
+            # Move this block
+            current_pos = self.scenePos()
+            new_pos = QPointF(current_pos.x(), current_pos.y() - delta_y)
+            self.setPos(new_pos)
+
+            # Move connected next blocks
+            if self.prev_block:
+                self.prev_block.move_up(delta_y)
+
+
     def move_down(self, delta_y=20):
         """
         Moves the block downward by delta_y pixels.
@@ -334,11 +317,13 @@ class Block(QGraphicsPathItem):
 
     def generate_code(self):
         command_mapping = {
-            'Move Forward': 'move_forward()',
-            'Turn Left': 'turn_left()',
-            'Turn Right': 'turn_right()',
-            'Play Sound': 'play_sound()'
+            'PIN': 'digitalWrite({}, {});',
+            'Сон': 'delay({});',
+            'Переменные': 'auto {} = {};',
+            'Условие': 'if ({} {} {})',
+            'Повтор': 'for (int i = 0; i < {n}; ++i)'
         }
+        print(self.text)
         command = command_mapping.get(self.text, '')
         code_lines = [command]
         if self.next_block:
@@ -387,6 +372,15 @@ class PINBlock(Block):
         self.combo_box_proxy.setParentItem(self)
         self.combo_box_proxy.setPos(delta * 2 + text_rect.width() + delta + text_rect_2.width() + delta, (self.height - text_rect_2.height()) / 2)
 
+    def generate_code(self):
+        program = super().generate_code()
+        if self.combo_box.currentText == "ON":
+            text = "HIGH"
+        else:
+            text = "LOW"
+        program = program.format(self.text_field.text(), text)
+        return program
+
 class VariableBlock(Block):
     def __init__(self, text, color, parent=None):
         super().__init__(text, color, parent)
@@ -401,11 +395,11 @@ class VariableBlock(Block):
         delta = 5
 
         #
-        self.text_field = QLineEdit()
-        self.text_field.setFont(QFont('Arial', 10))
-        self.text_field.setFixedWidth(50)
+        self.text_field1 = QLineEdit()
+        self.text_field1.setFont(QFont('Arial', 10))
+        self.text_field1.setFixedWidth(50)
         self.text_field_proxy = QGraphicsProxyWidget(self)
-        self.text_field_proxy.setWidget(self.text_field)
+        self.text_field_proxy.setWidget(self.text_field1)
         self.text_field_proxy.setParentItem(self)
         text_rect = self.text_field_proxy.boundingRect()
         self.text_field_proxy.setPos(delta * 3, (height - text_rect.height()) / 2)
@@ -419,14 +413,19 @@ class VariableBlock(Block):
         self.text_item.setPos(delta * 2 + text_rect.width() + delta * 2, (height - text_rect_1.height()) / 2)
 
         #
-        self.text_field = QLineEdit()
-        self.text_field.setFont(QFont('Arial', 10))
-        self.text_field.setFixedWidth(50)
+        self.text_field2 = QLineEdit()
+        self.text_field2.setFont(QFont('Arial', 10))
+        self.text_field2.setFixedWidth(50)
         self.text_field_proxy = QGraphicsProxyWidget(self)
-        self.text_field_proxy.setWidget(self.text_field)
+        self.text_field_proxy.setWidget(self.text_field2)
         self.text_field_proxy.setParentItem(self)
         text_rect_2 = self.text_field_proxy.boundingRect()
         self.text_field_proxy.setPos(delta * 2 + text_rect.width() + int(delta * 2 * 1.5) + text_rect_1.width(), (self.height - text_rect_2.height()) / 2)
+
+    def generate_code(self):
+        program = super().generate_code()
+        program = program.format(self.text_field1.text(), self.text_field2.text())
+        return program
 
 class DelayBlock(Block):
     def __init__(self, text, color, parent=None):
@@ -459,67 +458,21 @@ class DelayBlock(Block):
         self.text_field_proxy.setPos(
             (self.width - text_rect.width()) / 5 * 3.5, (self.height - text_rect.height()) / 2)
 
-
-
-
-class ConditionBlock(Block):
-    def __init__(self, text, color, parent=None):
-        super().__init__(text, color, parent)
-        self.initConditionUI()
-
-    def initConditionUI(self):
-        self.initUI()
-        self.notch_size = 10
-        self.tab_width = 20
-        self.tab_height = 10
-
-        # Add changeable text field (QLineEdit)
-        self.text_field = QLineEdit()
-        self.text_field.setFont(QFont('Arial', 10))
-        self.text_field.setFixedWidth(30)
-
-        self.text_field_proxy = QGraphicsProxyWidget(self)
-        self.text_field_proxy.setWidget(self.text_field)
-        text_rect = self.text_field_proxy.boundingRect()
-        self.text_field_proxy.setParentItem(self)
-        self.text_field_proxy.setPos(
-            (self.width - text_rect.width()) / 10, (self.height - text_rect.height()) / 2)
-
-       #Add combo box
-        self.combo_box = QComboBox()
-        self.combo_box.addItems(['==', '!=', '>', '<'])
-        self.combo_box.setFont(QFont('Arial', 10))
-
-        self.combo_box_proxy = QGraphicsProxyWidget(self)
-        self.combo_box_proxy.setWidget(self.combo_box)
-        text_rect = self.combo_box_proxy.boundingRect()
-        self.combo_box_proxy.setParentItem(self)
-        self.combo_box_proxy.setPos(
-            (self.width - text_rect.width()) / 2, (self.height - text_rect.height()) / 2)
-
-        # Add changeable text field (QLineEdit)
-        self.text_field = QLineEdit()
-        self.text_field.setFont(QFont('Arial', 10))
-        self.text_field.setFixedWidth(30)
-
-        self.text_field_proxy = QGraphicsProxyWidget(self)
-        self.text_field_proxy.setWidget(self.text_field)
-        text_rect = self.text_field_proxy.boundingRect()
-        self.text_field_proxy.setParentItem(self)
-        self.text_field_proxy.setPos(
-            (self.width - text_rect.width()) / 10 * 9, (self.height - text_rect.height()) / 2)
-
+    def generate_code(self):
+        program = super().generate_code()
+        program = program.format(self.text_field.text())
+        return program
 
 class ControlBlock(Block):
     def __init__(self, text, color, parent=None):
         super().__init__(text, color, parent)
 
+        self.width = 180
         self.child_blocks = []
         self.initControlUI()
         self.setZValue(0)  # Control blocks are below child blocks
 
     def initControlUI(self):
-        self.width = 140
         self.height = 80  # Initial height
         self.notch_size = 10
         self.tab_width = 20
@@ -528,11 +481,11 @@ class ControlBlock(Block):
         self.update_shape()
 
         # Add text
-        self.text_item = QGraphicsTextItem(self.text, self)
-        font = QFont('Arial', 12)
-        self.text_item.setFont(font)
-        text_rect = self.text_item.boundingRect()
-        self.text_item.setPos((self.width - text_rect.width()) / 2, 10)
+        # self.text_item = QGraphicsTextItem(self.text, self)
+        # font = QFont('Arial', 12)
+        # self.text_item.setFont(font)
+        # text_rect = self.text_item.boundingRect()
+        # self.text_item.setPos((self.width - text_rect.width()) / 2, 10)
 
     def update_shape(self):
         self.prepareGeometryChange()
@@ -627,7 +580,7 @@ class ControlBlock(Block):
         # Reposition all child blocks within the control block
         y_offset = 40
         for child in self.child_blocks:
-            child.setPos(20, y_offset)
+            child.setPos(abs(self.width - child.width) // 2, y_offset)
             y_offset += child.boundingRect().height()
             # If child is a ControlBlock, ensure it repositions its children
             if isinstance(child, ControlBlock):
@@ -661,6 +614,53 @@ class ControlBlock(Block):
 
     def snap_to_block(self):
         super().snap_to_block()
+
+class ConditionBlock(ControlBlock):
+    def __init__(self, text, color, parent=None):
+        super().__init__(text, color, parent)
+        self.initConditionUI()
+
+    def initConditionUI(self):
+        self.initUI()
+        self.notch_size = 5
+        self.tab_width = 20
+        self.tab_height = 10
+
+        # Add changeable text field (QLineEdit)
+        self.text_field = QLineEdit()
+        self.text_field.setFont(QFont('Arial', 10))
+        self.text_field.setFixedWidth(50)
+
+        self.text_field_proxy = QGraphicsProxyWidget(self)
+        self.text_field_proxy.setWidget(self.text_field)
+        text_rect = self.text_field_proxy.boundingRect()
+        self.text_field_proxy.setParentItem(self)
+        self.text_field_proxy.setPos(
+            (self.width - text_rect.width()) / 10, (text_rect.height()) / 2)
+
+       #Add combo box
+        self.combo_box = QComboBox()
+        self.combo_box.addItems(['==', '!=', '>', '<'])
+        self.combo_box.setFont(QFont('Arial', 10))
+
+        self.combo_box_proxy = QGraphicsProxyWidget(self)
+        self.combo_box_proxy.setWidget(self.combo_box)
+        text_rect = self.combo_box_proxy.boundingRect()
+        self.combo_box_proxy.setParentItem(self)
+        self.combo_box_proxy.setPos(
+            (self.width - text_rect.width()) / 2, (text_rect.height()) / 2)
+
+        # Add changeable text field (QLineEdit)
+        self.text_field = QLineEdit()
+        self.text_field.setFont(QFont('Arial', 10))
+        self.text_field.setFixedWidth(50)
+
+        self.text_field_proxy = QGraphicsProxyWidget(self)
+        self.text_field_proxy.setWidget(self.text_field)
+        text_rect = self.text_field_proxy.boundingRect()
+        self.text_field_proxy.setParentItem(self)
+        self.text_field_proxy.setPos(
+            (self.width - text_rect.width()) / 10 * 9, (text_rect.height()) / 2)
 
 class Workspace(QGraphicsView):
     def __init__(self, parent=None):
@@ -757,6 +757,7 @@ class MainWindow(QWidget):
         # Sort blocks by their vertical position
         blocks.sort(key=lambda block: block.scenePos().y())
         program = []
+        print(blocks)
         for block in blocks:
             code = block.generate_code()
             program.append(code)
