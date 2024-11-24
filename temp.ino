@@ -1,6 +1,30 @@
-void setup() {
-if (1 == 1){
-for (int i1 = 0; i1 < 1; ++i1){
-while (1 == 1){}}
-}
-}
+void setup(){Serial.start(9600);delay(3);pinMode(PIN0, INPUT);
+pinMode(PIN1, INPUT);
+pinMode(PIN2, INPUT);
+pinMode(PIN3, INPUT);
+pinMode(PIN4, INPUT);
+pinMode(PIN5, INPUT);
+pinMode(PIN6, INPUT);
+pinMode(PIN7, INPUT);
+pinMode(PIN8, INPUT);
+pinMode(PIN9, INPUT);
+pinMode(PIN10, INPUT);
+pinMode(PIN11, INPUT);
+pinMode(PIN12, INPUT);
+pinMode(PIN13, INPUT);
+pinMode(PIN14, INPUT);
+pinMode(PIN15, INPUT);
+pinMode(PIN16, INPUT);
+pinMode(PIN17, INPUT);
+pinMode(PIN20, INPUT);
+pinMode(PIN28, INPUT);
+pinMode(PIN29, INPUT);
+pinMode(PIN30, INPUT);
+pinMode(PIN31, INPUT);
+pinMode(PIN32, INPUT);
+pinMode(PIN33, INPUT);
+pinMode(PIN34, INPUT);
+pinMode(PIN35, INPUT);
+
+auto a = 1;
+a = digitalRead(2)}

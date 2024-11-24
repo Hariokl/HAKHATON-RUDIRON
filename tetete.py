@@ -10,7 +10,7 @@ from PyQt6.QtCore import Qt, QRectF, QPointF
 
 import keyword
 import re
-
+PINS = list(range(0, 18)) + [20] + list(range(28, 36))
 # Список ключевых слов C++
 cpp_keywords = {
     "alignas", "alignof", "and", "and_eq", "asm", "atomic_cancel", "atomic_commit",
@@ -29,10 +29,10 @@ cpp_keywords = {
 }
 
 def is_valid_analog_pin(pin):
-    return False
+    return True
 
 def is_valid_digital_pin(pin):
-    return False
+    return True
 
 def is_valid_integer(value):
     # Регулярное выражение для целых чисел
@@ -1336,8 +1336,19 @@ class DigitalReadBlock(Block):
         self.text_field_proxy.setPos((self.width - text_rect.width()) / 10 * 9,
                                      (self.height - text_rect_2.height()) / 2)
     def generate_code(self, recursion_depth=0):
-        program = super().generate_code(recursion_depth)
+        if self.text_field1.text() not in declared_variables:
+            show_message_box("Необходимо указать корректную переменную для записи результата цифрового чтения!")
+            return None
+        if not is_valid_analog_pin(self.text_field2.text()):
+            show_message_box("Необходимо указать корректный цифровой пин для чтения!")
+            return None
+        program = "{} = digitalRead({})"
         program = program.format(self.text_field1.text(), self.text_field2.text())
+        if self.next_block:
+            result = self.next_block.generate_code(recursion_depth)
+            if result is None:
+                return None
+            return program + result
         return program
 
 
@@ -1384,8 +1395,19 @@ class AnalogReadBlock(Block):
                                      (self.height - text_rect_2.height()) / 2)
 
     def generate_code(self, recursion_depth=0):
-        program = super().generate_code(recursion_depth)
+        if self.text_field1.text() not in declared_variables:
+            show_message_box("Необходимо указать корректную переменную для записи результата аналогового чтения!")
+            return None
+        if not is_valid_analog_pin(self.text_field2.text()):
+            show_message_box("Необходимо указать корректный аналоговый пин для чтения!")
+            return None
+        program = "{} = analogRead({})"
         program = program.format(self.text_field1.text(), self.text_field2.text())
+        if self.next_block:
+            result = self.next_block.generate_code(recursion_depth)
+            if result is None:
+                return None
+            return program + result
         return program
 
 
@@ -1433,6 +1455,11 @@ class DigitalWriteBlock(Block):
     def generate_code(self, recursion_depth=0):
         program = super().generate_code(recursion_depth)
         program = program.format(self.text_field.text(), self.combo_box.currentText)
+        if self.next_block:
+            result = self.next_block.generate_code(recursion_depth)
+            if result is None:
+                return None
+            return program + result
         return program
 
 
@@ -1481,6 +1508,11 @@ class AnalogWriteBlock(Block):
     def generate_code(self, recursion_depth=0):
         program = super().generate_code(recursion_depth)
         program = program.format(self.text_field1.text(), self.text_field2.text())
+        if self.next_block:
+            result = self.next_block.generate_code(recursion_depth)
+            if result is None:
+                return None
+            return program + result
         return program
 
 
@@ -1508,6 +1540,11 @@ class SerialReadBlock(Block):
     def generate_code(self, recursion_depth=0):
         program = super().generate_code(recursion_depth)
         program = program.format()
+        if self.next_block:
+            result = self.next_block.generate_code(recursion_depth)
+            if result is None:
+                return None
+            return program + result
         return program
 
 
@@ -1546,6 +1583,11 @@ class SerialWriteBlock(Block):
     def generate_code(self, recursion_depth=0):
         program = super().generate_code(recursion_depth)
         program = program.format(self.text_field.text())
+        if self.next_block:
+            result = self.next_block.generate_code(recursion_depth)
+            if result is None:
+                return None
+            return program + result
         return program
 
 
@@ -1677,8 +1719,7 @@ class PinConfigurationWidget(QWidget):
         scroll_content = QWidget()
         scroll_layout = QVBoxLayout(scroll_content)
 
-        pin_numbers = list(range(0, 18)) + [20] + list(range(28, 36))
-        for pin_number in pin_numbers:
+        for pin_number in PINS:
             h_layout = QHBoxLayout()
             label = QLabel(f"Pin{pin_number}")
             combobox = QComboBox()
@@ -1766,7 +1807,13 @@ class MainWindow(QWidget):
         QMessageBox.information(
             self, "Program", f"Ваша программа успешно сгенерированна!")
         # Here you can add code to send 'rudiron_code' to the Rudiron controller
-        rendered_rudiron_code = f"void setup() {{{rudiron_code}}}"
+        rendered_rudiron_code = "void setup(){"
+        rendered_rudiron_code += "Serial.start(9600);"
+        rendered_rudiron_code += "delay(3);"
+        for i in PINS:
+            rendered_rudiron_code += f"pinMode(PIN{i}, {self.pin_config_widget.pin_comboboxes[i].currentText()});\n"
+        rendered_rudiron_code += rudiron_code
+        rendered_rudiron_code += "}"
         print(rendered_rudiron_code)
         with open("temp.ino", "w") as file:
             file.write(rendered_rudiron_code)
