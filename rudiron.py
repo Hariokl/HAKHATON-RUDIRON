@@ -1,7 +1,8 @@
 import subprocess
+import os
 
-sketch_path = 'C:\\Users\\PC\\Documents\\Arduino\\sketch_nov23a\\sketch_nov23a.ino'  # Use double backslashes in Windows paths
-
+sketch_path = os.path.abspath(os.curdir) + "\\temp\\temp.ino" # Use double backslashes in Windows paths
+print(sketch_path)
 fqbn = 'Rudiron:MDR32F9Qx:buterbrodR916'
 
 
@@ -21,7 +22,9 @@ else:
     print("Compilation successful.")
 
 print("Uploading the sketch...")
-upload_command = ['arduino-cli', 'upload', '-p', port, '--fqbn', fqbn, sketch_path]
+upload_command = [
+    'arduino-cli', 'upload', '-p', port, '--fqbn', fqbn, '--verbose', sketch_path
+]
 upload_process = subprocess.run(
     upload_command, capture_output=True, text=True, encoding='utf-8'
 )
@@ -32,6 +35,7 @@ if upload_process.returncode != 0:
     exit(1)
 else:
     print("Upload successful.")
+
 
 
 # arduino-cli compile --fqbn Rudiron:MDR32F9Qx:buterbrodR916 "C:\\Users\\PC\\Documents\\Arduino\\sketch_nov23a\\sketch_nov23a.ino"

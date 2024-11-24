@@ -1,3 +1,4 @@
+import os
 import sys
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QGraphicsView, QGraphicsScene, QGraphicsItem,
@@ -1609,17 +1610,17 @@ class BlockPalette(QWidget):
         colors = [
             QColor('#ff3386'),
             QColor('#FF5733'),
-            QColor('#FF5733'),
-            QColor('#FF5733'),
+            QColor('#00FFFF'),
+            QColor('#FF00FF'),
             QColor('#33FF57'),
             QColor('#3357FF'),
             QColor('#F1C40F'),
             QColor('#9B59B6'),
-            QColor('#9B59B6'),
-            QColor('#9B59B6'),
-            QColor('#9B59B6'),
-            QColor('#9B59B6'),
-            QColor('#9B59B6')
+            QColor('#FF69B4'),
+            QColor('#8B00FF'),
+            QColor('#BFFF00'),
+            QColor('#40E0D0'),
+            QColor('#FFD700')
         ]
 
         for text, color in zip(blocks, colors):
@@ -1758,17 +1759,17 @@ class MainWindow(QWidget):
 
         # Get the pin configurations
         pin_configs = self.pin_config_widget.get_pin_configurations()
-        print("Pin Configurations:")
         pin_numbers = sorted(self.pin_config_widget.pin_comboboxes.keys())
+        pin_init = ""
         for pin, config in zip(pin_numbers, pin_configs):
-            print(f"Pin{pin}: {config}")
-
+            pin_init += f"pinMode({pin}, {config});\n"
         QMessageBox.information(
             self, "Program", f"Ваша программа успешно сгенерированна!")
-        # Here you can add code to send 'rudiron_code' to the Rudiron controller
-        rendered_rudiron_code = f"void setup() {{{rudiron_code}}}"
+        rendered_rudiron_code = f"void setup() {{\n{pin_init}{rudiron_code}}}"
         print(rendered_rudiron_code)
-        with open("temp.ino", "w") as file:
+        if not os.path.isdir("temp"):
+            os.mkdir("temp")
+        with open(os.path.abspath(os.curdir) + "\\temp\\temp.ino", "w") as file:
             file.write(rendered_rudiron_code)
 
 
