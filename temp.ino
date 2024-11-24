@@ -1,4 +1,4 @@
-void setup(){Serial.start(9600);delay(3);pinMode(PIN0, INPUT);
+void setup(){Serial.begin(9600);delay(10);pinMode(PIN0, INPUT);
 pinMode(PIN1, INPUT);
 pinMode(PIN2, INPUT);
 pinMode(PIN3, INPUT);
@@ -16,7 +16,16 @@ pinMode(PIN14, INPUT);
 pinMode(PIN15, INPUT);
 pinMode(PIN16, INPUT);
 pinMode(PIN17, INPUT);
+pinMode(PIN18, INPUT);
+pinMode(PIN19, INPUT);
 pinMode(PIN20, INPUT);
+pinMode(PIN21, INPUT);
+pinMode(PIN22, INPUT);
+pinMode(PIN23, INPUT);
+pinMode(PIN24, INPUT);
+pinMode(PIN25, INPUT);
+pinMode(PIN26, INPUT);
+pinMode(PIN27, INPUT);
 pinMode(PIN28, INPUT);
 pinMode(PIN29, INPUT);
 pinMode(PIN30, INPUT);
@@ -27,4 +36,4 @@ pinMode(PIN34, INPUT);
 pinMode(PIN35, INPUT);
 
 auto a = 1;
-a = digitalRead(2)}
+}

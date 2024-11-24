@@ -579,8 +579,13 @@ class Block(QGraphicsPathItem):
             'АЧтение': 'analogRead({});',
             'ЦЗапись': 'digitalWrite({}, {});',
             'АЗапись': 'analogWrite({}, {});',
+<<<<<<< HEAD
             'Слушай': 'Serial.read();',
             'Говори': 'Serial.println({});'}
+=======
+            'Читать\nсерийный порт': 'Serial.read();',
+            'Запись\nв серийный порт': 'Serial.println({});'}
+>>>>>>> c167deb82bd7152e27485406a7906b4304428caa
         command = command_mapping.get(self.text, '')
         code_lines = [command]
         if self.next_block:
@@ -1578,6 +1583,15 @@ class SerialReadBlock(Block):
         text_rect = self.text_field_proxy.boundingRect()
         self.text_field_proxy.setPos((width - text_rect.width()) / 15, (height - text_rect.height()) / 2)
 
+<<<<<<< HEAD
+=======
+        # Add text
+        self.text_item = QGraphicsTextItem("=", self)
+        font = QFont('Arial', 10)
+        self.text_item.setFont(font)
+        text_rect_1 = self.text_item.boundingRect()
+        self.text_item.setPos((width - text_rect_1.width()) / 15 * 4, (height - text_rect_1.height()) / 2)
+>>>>>>> c167deb82bd7152e27485406a7906b4304428caa
         # Add text
         self.text_item = QGraphicsTextItem("=", self)
         font = QFont('Arial', 10)
@@ -1706,7 +1720,11 @@ class BlockPalette(QWidget):
         self.parent = parent
         blocks = ['Начало', 'Переменные', 'Арифметика', 'Сон', 'Условие', 'Повтор', 'Цикл', 'ЦЧтение', 'АЧтение',
                   'ЦЗапись',
+<<<<<<< HEAD
                   'АЗапись', 'Слушай', 'Говори']
+=======
+                  'АЗапись', 'Читать\nсерийный порт', 'Запись\nв серийный порт']
+>>>>>>> c167deb82bd7152e27485406a7906b4304428caa
         colors = [
             QColor('#ff3386'),
             QColor('#FF5733'),
@@ -1761,6 +1779,7 @@ class BlockPalette(QWidget):
         self.parent.workspace.scene().addItem(block)
         block.setPos(100, 100)
 
+<<<<<<< HEAD
 
 class PinConfigurationWidget(QWidget):
     def __init__(self, parent=None):
@@ -1801,6 +1820,177 @@ class PinConfigurationWidget(QWidget):
         pin_numbers = sorted(self.pin_comboboxes.keys())
         pin_configs = [self.pin_comboboxes[pin].currentText() for pin in pin_numbers]
         return pin_configs
+=======
+>>>>>>> c167deb82bd7152e27485406a7906b4304428caa
+
+
+class SerialReaderWidget(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.serial_port = None
+        self.init_ui()
+        self.setup_timer()
+
+    def init_ui(self):
+        # Основные макеты
+        main_layout = QVBoxLayout()
+        port_layout = QHBoxLayout()
+        send_layout = QHBoxLayout()
+
+        # Выбор последовательного порта
+        self.port_label = QLabel("Последовательный порт:")
+        self.port_combo = QComboBox()
+        self.refresh_button = QPushButton("Обновить")
+        self.refresh_button.clicked.connect(self.refresh_serial_ports)
+        self.connect_button = QPushButton("Подключиться")
+        self.connect_button.clicked.connect(self.toggle_connection)
+
+        # Добавление элементов в портовый макет
+        port_layout.addWidget(self.port_label)
+        port_layout.addWidget(self.port_combo)
+        port_layout.addWidget(self.refresh_button)
+        port_layout.addWidget(self.connect_button)
+
+        # Текстовая область для отображения полученных данных
+        self.text_area = QTextEdit()
+        self.text_area.setReadOnly(True)
+        self.text_area.setPlaceholderText("Полученные данные будут отображаться здесь...")
+
+        # Поле ввода и кнопка для отправки данных
+        self.send_input = QLineEdit()
+        self.send_input.setPlaceholderText("Введите данные для отправки...")
+        self.send_input.returnPressed.connect(self.send_serial_data)  # Отправка при нажатии Enter
+
+        self.send_button = QPushButton("Отправить")
+        self.send_button.clicked.connect(self.send_serial_data)
+        self.send_button.setEnabled(False)  # Отключена до подключения
+
+        # Добавление элементов в отправочный макет
+        send_layout.addWidget(self.send_input)
+        send_layout.addWidget(self.send_button)
+
+        # Добавление всех макетов в основной макет
+        main_layout.addLayout(port_layout)
+        main_layout.addWidget(self.text_area)
+        main_layout.addLayout(send_layout)
+
+        self.setLayout(main_layout)
+        self.setWindowTitle("Serial Reader Widget")
+        self.resize(600, 400)
+
+        # Инициальное обновление списка портов
+        self.refresh_serial_ports()
+
+    def setup_timer(self):
+        """Настройка таймера для периодического чтения данных из порта."""
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.read_serial_data)
+        self.timer.start(1000)  # Проверка каждые 1 секунду
+
+    def refresh_serial_ports(self):
+        """Обновление списка доступных последовательных портов."""
+        self.port_combo.clear()
+        ports = serial.tools.list_ports.comports()
+        for port in ports:
+            self.port_combo.addItem(port.device)
+
+        if not ports:
+            self.port_combo.addItem("Порты не найдены")
+            self.connect_button.setEnabled(False)
+            self.send_button.setEnabled(False)
+            QMessageBox.warning(self, "Порты не найдены", "Доступные последовательные порты не обнаружены.")
+        else:
+            self.connect_button.setEnabled(True)
+
+    def toggle_connection(self):
+        """Переключение состояния подключения."""
+        if self.serial_port and self.serial_port.is_open:
+            self.disconnect_serial()
+        else:
+            self.connect_serial()
+
+    def connect_serial(self):
+        """Подключение к выбранному последовательному порту."""
+        selected_port = self.port_combo.currentText()
+        if selected_port == "Порты не найдены":
+            QMessageBox.warning(self, "Ошибка подключения", "Доступные последовательные порты не найдены.")
+            return
+        try:
+            self.serial_port = serial.Serial(
+                port=selected_port,
+                baudrate=9600,  # Настройте скорость передачи по необходимости
+                timeout=1,
+                bytesize=serial.EIGHTBITS,
+                parity=serial.PARITY_NONE,
+                stopbits=serial.STOPBITS_ONE
+            )
+            if self.serial_port.is_open:
+                self.connect_button.setText("Отключиться")
+                self.send_button.setEnabled(True)
+                self.text_area.append(f"Подключено к {selected_port}\n")
+        except serial.SerialException as e:
+            QMessageBox.critical(self, "Ошибка подключения",
+                                 f"Не удалось подключиться к {selected_port}.\n\nОшибка: {e}")
+            self.connect_button.setEnabled(False)
+            self.send_button.setEnabled(False)
+            self.serial_port = None
+
+    def disconnect_serial(self):
+        """Отключение от последовательного порта."""
+        if self.serial_port and self.serial_port.is_open:
+            self.serial_port.close()
+            self.connect_button.setText("Подключиться")
+            self.send_button.setEnabled(False)
+            self.text_area.append("Отключено от последовательного порта.\n")
+
+    def read_serial_data(self):
+        """Чтение данных из последовательного порта и отображение их в текстовой области."""
+        if self.serial_port and self.serial_port.is_open:
+            try:
+                # if self.serial_port.in_waiting or True:
+                data = self.serial_port.read_all().decode('ascii', errors='replace').strip()
+                if data:
+                    self.text_area.append(data)
+                    # Автопрокрутка вниз
+                    self.text_area.verticalScrollBar().setValue(
+                        self.text_area.verticalScrollBar().maximum()
+                    )
+            except serial.SerialException as e:
+                self.text_area.append(f"Ошибка последовательного порта: {e}\n")
+                QMessageBox.critical(self, "Ошибка последовательного порта",
+                                     f"Произошла ошибка при чтении данных.\n\nОшибка: {e}")
+                self.disconnect_serial()
+            except Exception as e:
+                self.text_area.append(f"Неожиданная ошибка: {e}\n")
+                QMessageBox.critical(self, "Неожиданная ошибка", f"Произошла неожиданная ошибка.\n\nОшибка: {e}")
+
+    def send_serial_data(self):
+        """Отправка данных через последовательный порт."""
+        if self.serial_port and self.serial_port.is_open:
+            data = self.send_input.text()
+            if data:
+                try:
+                    # Добавляем символ перевода строки, если требуется
+                    self.serial_port.write((data + '\n').encode('utf-8'))
+                    self.text_area.append(f"Отправлено: {data}")
+                    self.send_input.clear()
+                except serial.SerialException as e:
+                    self.text_area.append(f"Ошибка отправки данных: {e}\n")
+                    QMessageBox.critical(self, "Ошибка отправки", f"Не удалось отправить данные.\n\nОшибка: {e}")
+                    self.disconnect_serial()
+                except Exception as e:
+                    self.text_area.append(f"Неожиданная ошибка при отправке данных: {e}\n")
+                    QMessageBox.critical(self, "Неожиданная ошибка",
+                                         f"Произошла неожиданная ошибка при отправке данных.\n\nОшибка: {e}")
+        else:
+            QMessageBox.warning(self, "Не подключено",
+                                "Пожалуйста, подключитесь к последовательному порту перед отправкой данных.")
+
+    def closeEvent(self, event):
+        """Корректное закрытие соединения при закрытии виджета."""
+        if self.serial_port and self.serial_port.is_open:
+            self.serial_port.close()
+        event.accept()
 
 
 class SerialReaderWidget(QWidget):
