@@ -38,7 +38,8 @@ def is_valid_cpp_variable_name(name):
     # Проверяем, что имя не является ключевым словом C++
     if name in cpp_keywords:
         return False
-
+    if re.match(r'^i\d+$', name):
+        return False
     # Проверяем формат имени переменной
     if re.match(r'^[a-zA-Z_]\w*$', name):
         return True
@@ -80,7 +81,7 @@ class PopupWindow(QDialog):
         layout.addWidget(close_button)
         self.setLayout(layout)
 
-
+    
 class Block(QGraphicsPathItem):
     def __init__(self, text, color, parent=None):
         super().__init__(parent)
@@ -168,6 +169,20 @@ class Block(QGraphicsPathItem):
 
         super().mousePressEvent(event)
 
+
+    def find_head(self):
+        head = self
+        while head.prev_block:
+            head = head.prev_block
+        return head
+
+    def find_tail(self):
+        tail = self
+        while tail.next_block:
+            tail = tail.next_block
+        return tail
+
+
     def mouseMoveEvent(self, event):
         super().mouseMoveEvent(event)
 
@@ -236,6 +251,45 @@ class Block(QGraphicsPathItem):
                     stack.append(block.next_block)
         return blocks
 
+    # def check_for_snap(self):
+    #     # Reset any previous highlighted block
+    #     if self.highlighted_block:
+    #         self.highlighted_block.setPen(QPen(Qt.GlobalColor.black))
+    #         self.highlighted_block = None
+
+    #     # Highlight potential snap targets
+    #     colliding_items = self.scene().collidingItems(self)
+
+    #     # Filter out child items and self
+    #     connected_blocks = self.get_all_connected_blocks()
+    #     colliding_items = [item for item in colliding_items if item != self and not self.is_descendant_of(item) and item not in connected_blocks]
+
+    #     for item in colliding_items:
+    #         if isinstance(item, ControlBlock):
+    #             if item.is_open_area(self.scenePos()):
+    #                 item.setPen(QPen(QColor('purple'), 2))
+    #                 self.highlighted_block = item
+    #                 return
+    #             else:
+    #                 if self.dragging_from_top and self.is_near(item, above=True):
+    #                     item.setPen(QPen(QColor('green'), 2))
+    #                     self.highlighted_block = item
+    #                     return
+    #                 elif not self.dragging_from_top and self.is_near(item, below=True):
+    #                     item.setPen(QPen(QColor('blue'), 2))
+    #                     self.highlighted_block = item
+    #                     return
+    #         elif isinstance(item, Block):
+    #             if self.dragging_from_top and self.is_near(item, above=True):
+    #                 item.setPen(QPen(QColor('green'), 2))
+    #                 self.highlighted_block = item
+    #                 return
+    #             elif not self.dragging_from_top and self.is_near(item, below=True):
+    #                 item.setPen(QPen(QColor('blue'), 2))
+    #                 self.highlighted_block = item
+    #                 return
+
+
     def check_for_snap(self):
         # Reset any previous highlighted block
         if self.highlighted_block:
@@ -246,7 +300,8 @@ class Block(QGraphicsPathItem):
         colliding_items = self.scene().collidingItems(self)
 
         # Filter out child items and self
-        colliding_items = [item for item in colliding_items if item != self and not self.is_descendant_of(item)]
+        connected_blocks = self.get_all_connected_blocks()
+        colliding_items = [item for item in colliding_items if item != self and not self.is_descendant_of(item) and item not in connected_blocks]
 
         for item in colliding_items:
             if isinstance(item, ControlBlock):
@@ -361,8 +416,27 @@ class Block(QGraphicsPathItem):
     #     else:
     #         # If not snapped to anything, ensure the block is standalone
     #         pass  # Do not disconnect here to maintain existing connections
+    def reposition_next_blocks(self):
+        y_offset = self.height + self.y()
+        current = self.next_block
+        while current:
+            current.setPos(self.x(), y_offset)
+            y_offset += current.boundingRect().height()
+            if isinstance(current, ControlBlock):
+                current.reposition_child_blocks()
+            current = current.next_block
 
+    def reposition_prev_blocks(self):
+        y_offset = -self.height + self.y()
+        current = self.prev_block
+        while current:
+            current.setPos(self.x(), y_offset)
+            y_offset -= current.boundingRect().height()
+            if isinstance(current, ControlBlock):
+                current.reposition_child_blocks()
+            current = current.prev_block
 
+    
     def snap_to_block(self):
         if self.highlighted_block:
             # Reset pen of the highlighted block
@@ -480,7 +554,7 @@ class Block(QGraphicsPathItem):
         if self.next_block:
             self.next_block.move_down(delta_y)
 
-    def generate_code(self):
+    def generate_code(self, recursion_depth=0):
         command_mapping = {
             'PIN': 'digitalWrite({}, {});',
             'Сон': 'delay({});',
@@ -496,7 +570,7 @@ class Block(QGraphicsPathItem):
         command = command_mapping.get(self.text, '')
         code_lines = [command]
         if self.next_block:
-            code = self.next_block.generate_code()
+            code = self.next_block.generate_code(recursion_depth)
             if code is None:
                 return
             code_lines.append(code)
@@ -646,7 +720,6 @@ class ControlBlock(Block):
     def snap_to_block(self):
         super().snap_to_block()
 
-
 class StartBlock(Block):
     start_block = None
 
@@ -715,7 +788,7 @@ class VariableBlock(Block):
         text_rect_2 = self.text_field_proxy.boundingRect()
         self.text_field_proxy.setPos(delta * 2 + text_rect.width() + int(delta * 2 * 1.5) + text_rect_1.width(), (self.height - text_rect_2.height()) / 2)
 
-    def generate_code(self):
+    def generate_code(self, recursion_depth=0):
         if self.text_field1.text() == "" or not is_valid_cpp_variable_name(self.text_field1.text()):
             show_message_box(f"Название переменной '{self.text_field1.text()}' некорректно!")
             return None
@@ -729,7 +802,7 @@ class VariableBlock(Block):
         program = 'auto {} = {};\n'
         program = program.format(self.text_field1.text(), self.text_field2.text())
         if self.next_block:
-            result = self.next_block.generate_code()
+            result = self.next_block.generate_code(recursion_depth)
             if result is None:
                 return None
             return program + result
@@ -799,7 +872,7 @@ class ArithmeticBlock(Block):
         self.text_field_proxy.setPos(
             int(delta * 2) + text_rect.width() + delta * 2 + text_rect_1.width() + text_rect3.width() + text_rect_2.width(), (self.height - text_rect_2.height()) / 2)
 
-    def generate_code(self, i=1):
+    def generate_code(self, recursion_depth=0):
         program = '{} = {} {} {};'
         if self.text_field1.text() not in declared_variables:
             show_message_box(f"Переменная {self.text_field1.text()} не объявлена!")
@@ -809,10 +882,10 @@ class ArithmeticBlock(Block):
             return None
         if not is_valid_integer_or_var( self.text_field3.text()):
             show_message_box(f"Значение правого операнда должно быть целым числом или переменной!")
-            return None
+            return None 
         program = program.format(self.text_field1.text(), self.text_field2.text(), self.combo_box.currentText(), self.text_field3.text())
         if self.next_block:
-            result = self.next_block.generate_code()
+            result = self.next_block.generate_code(recursion_depth)
             if result is None:
                 return None
             return program + result
@@ -850,17 +923,17 @@ class DelayBlock(Block):
         self.text_field_proxy.setPos(
             (self.width - text_rect.width()) / 5 * 3.5, (self.height - text_rect.height()) / 2)
 
-    def generate_code(self):
+    def generate_code(self, recursion_depth=0):
         if not is_valid_integer_or_var(self.text_field.text()):
             show_message_box("Продолжительность сна должна быть целым числом или переменной!")
             return None
         program = 'delay({});\n'
         program = program.format(self.text_field.text())
         if self.next_block:
-            result = self.next_block.generate_code()
+            result = self.next_block.generate_code(recursion_depth)
             if result is None:
                 return None
-            return program + result
+            return program + result        
         return program
 
 class ControlBlock(Block):
@@ -987,17 +1060,19 @@ class ControlBlock(Block):
             if isinstance(child, ControlBlock):
                 child.reposition_child_blocks()
 
-    def generate_code(self):
+    def generate_code(self, recursion_depth=0):
         code_lines = []
         if self.text == 'Повтор':
             code_lines.append('for i in range(10):')
-            for child in self.child_blocks:
-                child_code = child.generate_code()
-                indented_code = '\n'.join(
-                    ['    ' + line for line in child_code.split('\n')])
-                code_lines.append(indented_code)
+            # for child in self.child_blocks:
+            #     child_code = child.generate_code(recursion_depth)
+            #     indented_code = '\n'.join(
+            #         ['    ' + line for line in child_code.split('\n')])
+            #     code_lines.append(indented_code)
+        if self.child_blocks:
+            program += self.child_blocks[0].generate_code(recursion_depth + 1)
         if self.next_block:
-            code_lines.append(self.next_block.generate_code())
+            code_lines.append(self.next_block.generate_code(recursion_depth))
         return '\n'.join(code_lines)
 
     def mousePressEvent(self, event):
@@ -1015,7 +1090,6 @@ class ControlBlock(Block):
 
     def snap_to_block(self):
         super().snap_to_block()
-
 
 class ConditionBlock(ControlBlock):
     def __init__(self, text, color, parent=None):
@@ -1064,7 +1138,7 @@ class ConditionBlock(ControlBlock):
         self.text_field_proxy.setPos(
             (self.width - text_rect.width()) / 10 * 9, (text_rect.height()) / 2)
 
-    def generate_code(self):
+    def generate_code(self, recursion_depth=0):
         if not is_valid_integer_or_var(self.text_field.text()):
             show_message_box("Условия применимы только для переменных и целых чисел!")
             return None
@@ -1074,14 +1148,16 @@ class ConditionBlock(ControlBlock):
         program = 'if ({} {} {})'
         program = program.format(self.text_field.text(), self.combo_box.currentText(), self.text_field2.text())
         program += '{\n'
-        for child in self.child_blocks:
-            program += child.generate_code()
+        # for child in self.child_blocks:
+        #     program += child.generate_code(recursion_depth + 1)
+        if self.child_blocks:
+            program += self.child_blocks[0].generate_code(recursion_depth + 1)
         program += '}\n'
         if self.next_block:
-            result = self.next_block.generate_code()
+            result = self.next_block.generate_code(recursion_depth)
             if result is None:
                 return None
-            return program + result
+            return program + result 
         return program
 
 class ForCycleBlock(ControlBlock):
@@ -1121,22 +1197,24 @@ class ForCycleBlock(ControlBlock):
         text_rect = self.text_item.boundingRect()
         self.text_item.setPos((delta * 4 + self.width - text_rect.width()) // 2 + text_rect2.width(), (text_rect.height()) // 2 - delta * 2)
 
-    def generate_code(self):
+    def generate_code(self, recursion_depth=0):
 
-        if not is_valid_integer_or_var(self.text_field2):
+        if not is_valid_integer_or_var(self.text_field2.text()):
             show_message_box("Количеством повторов должно быть ыцелое число или переменная!")
-            return None
-        program = 'for (int i = 0; i < {}; ++i)'
-        program = program.format(self.text_field2.text())
+            return None 
+        program = 'for (int i{} = 0; i{} < {}; ++i{})'
+        program = program.format(recursion_depth, recursion_depth, self.text_field2.text(), recursion_depth)
         program += '{\n'
-        for child in self.child_blocks:
-            program += child.generate_code()
+        # for child in self.child_blocks:
+        #     program += child.generate_code(recursion_depth + 1)
+        if self.child_blocks:
+            program += self.child_blocks[0].generate_code(recursion_depth + 1)
         program += '}\n'
         if self.next_block:
-            result = self.next_block.generate_code()
+            result = self.next_block.generate_code(recursion_depth)
             if result is None:
                 return None
-            return program + result
+            return program + result 
         return program
 
 class WhileCycleBlock(ControlBlock):
@@ -1187,8 +1265,8 @@ class WhileCycleBlock(ControlBlock):
         self.text_field_proxy.setPos(
             (self.width - text_rect.width()) / 10 * 9, (text_rect.height()) / 2)
 
-    def generate_code(self, i=1):
-
+    def generate_code(self, recursion_depth=0):
+        
         if not is_valid_integer_or_var(self.text_field.text()):
             show_message_box("Циклы с условием применимы только для переменных и целых чисел!")
             return None
@@ -1198,14 +1276,16 @@ class WhileCycleBlock(ControlBlock):
         program = 'while ({} {} {})'
         program = program.format(self.text_field.text(), self.combo_box.currentText(), self.text_field2.text())
         program += '{'
-        for child in self.child_blocks:
-            program += child.generate_code()
+        # for child in self.child_blocks:
+        #     program += child.generate_code(recursion_depth + 1)
+        if self.child_blocks:
+            program += self.child_blocks[0].generate_code(recursion_depth + 1)
         program += '}'
         if self.next_block:
-            result = self.next_block.generate_code()
+            result = self.next_block.generate_code(recursion_depth)
             if result is None:
                 return None
-            return program + result
+            return program + result 
         return program
 
 
@@ -1239,8 +1319,8 @@ class DigitalReadBlock(Block):
         text_rect_2 = self.text_field_proxy.boundingRect()
         self.text_field_proxy.setPos(int(delta * 2 + text_rect.width() + delta), (self.height - text_rect_2.height()) / 2)
 
-    def generate_code(self):
-        program = super().generate_code()
+    def generate_code(self, recursion_depth=0):
+        program = super().generate_code(recursion_depth)
         program = program.format(self.text_field.text())
         return program
 
@@ -1276,8 +1356,8 @@ class AnalogReadBlock(Block):
         text_rect_2 = self.text_field_proxy.boundingRect()
         self.text_field_proxy.setPos(int(delta * 2 + text_rect.width() + delta), (self.height - text_rect_2.height()) / 2)
 
-    def generate_code(self):
-        program = super().generate_code()
+    def generate_code(self, recursion_depth=0):
+        program = super().generate_code(recursion_depth)
         program = program.format(self.text_field.text())
         return program
 
@@ -1323,8 +1403,8 @@ class DigitalWriteBlock(Block):
         self.combo_box_proxy.setParentItem(self)
         self.combo_box_proxy.setPos(delta * 2 + text_rect.width() + delta + text_rect_2.width() + delta, (self.height - text_rect_2.height()) / 2)
 
-    def generate_code(self):
-        program = super().generate_code()
+    def generate_code(self, recursion_depth=0):
+        program = super().generate_code(recursion_depth)
         program = program.format(self.text_field.text(), self.combo_box.currentText)
         return program
 
@@ -1371,8 +1451,8 @@ class AnalogWriteBlock(Block):
         self.text_field_proxy.setPos(delta * 2 + text_rect.width() + delta + text_rect_2.width() + delta,
                                     (self.height - text_rect_2.height()) / 2)
 
-    def generate_code(self):
-        program = super().generate_code()
+    def generate_code(self, recursion_depth=0):
+        program = super().generate_code(recursion_depth)
         program = program.format(self.text_field1.text(), self.text_field2.text())
         return program
 
@@ -1398,8 +1478,8 @@ class SerialReadBlock(Block):
         text_rect = self.text_item.boundingRect()
         self.text_item.setPos(delta * 2, (height - text_rect.height()) / 2)
 
-    def generate_code(self):
-        program = super().generate_code()
+    def generate_code(self, recursion_depth=0):
+        program = super().generate_code(recursion_depth)
         program = program.format()
         return program
 
@@ -1436,8 +1516,8 @@ class SerialWriteBlock(Block):
         self.text_field_proxy.setPos(int(delta * 2 + text_rect.width()), (self.height - text_rect_2.height()) / 2)
 
 
-    def generate_code(self):
-        program = super().generate_code()
+    def generate_code(self, recursion_depth=0):
+        program = super().generate_code(recursion_depth)
         program = program.format(self.text_field.text())
         return program
 
