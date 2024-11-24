@@ -28,6 +28,11 @@ cpp_keywords = {
     "wchar_t", "while", "xor", "xor_eq"
 }
 
+def is_valid_analog_pin(pin):
+    return False
+
+def is_valid_digital_pin(pin):
+    return False
 
 def is_valid_integer(value):
     # Регулярное выражение для целых чисел
@@ -1357,7 +1362,7 @@ class AnalogReadBlock(Block):
         self.text_field_proxy.setPos(int(delta * 2 + text_rect.width() + delta), (self.height - text_rect_2.height()) / 2)
 
     def generate_code(self, recursion_depth=0):
-        program = super().generate_code(recursion_depth)
+        program = "Serial.read({})"
         program = program.format(self.text_field.text())
         return program
 
