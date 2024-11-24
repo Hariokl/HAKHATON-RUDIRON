@@ -1568,12 +1568,28 @@ class SerialReadBlock(Block):
         height = self.height
         delta = 5
 
+        #
+        self.text_field = QLineEdit()
+        self.text_field.setFont(QFont('Arial', 10))
+        self.text_field.setFixedWidth(30)
+        self.text_field_proxy = QGraphicsProxyWidget(self)
+        self.text_field_proxy.setWidget(self.text_field)
+        self.text_field_proxy.setParentItem(self)
+        text_rect = self.text_field_proxy.boundingRect()
+        self.text_field_proxy.setPos((width - text_rect.width()) / 15, (height - text_rect.height()) / 2)
+
+        # Add text
+        self.text_item = QGraphicsTextItem("=", self)
+        font = QFont('Arial', 10)
+        self.text_item.setFont(font)
+        text_rect_1 = self.text_item.boundingRect()
+        self.text_item.setPos((width - text_rect_1.width()) / 15 * 4, (height - text_rect_1.height()) / 2)
         # Add text
         self.text_item = QGraphicsTextItem("Читать\nсерийный порт", self)
         font = QFont('Arial', 10)
         self.text_item.setFont(font)
         text_rect = self.text_item.boundingRect()
-        self.text_item.setPos(delta * 2, (height - text_rect.height()) / 2)
+        self.text_item.setPos((width - text_rect.width()) / 10 * 8, (height - text_rect.height()) / 2)
 
     def generate_code(self, recursion_depth=0):
         program = super().generate_code(recursion_depth)
