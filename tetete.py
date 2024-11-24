@@ -1,16 +1,17 @@
+import os
 import sys
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QGraphicsView, QGraphicsScene, QGraphicsItem,
     QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMessageBox, QGraphicsTextItem,
-    QGraphicsPathItem, QLineEdit, QGraphicsProxyWidget, QComboBox, QScrollArea, QDialog, QScrollArea, QDialog, QTextEdit, QLineEdit
+    QGraphicsPathItem, QLineEdit, QGraphicsProxyWidget, QComboBox, QScrollArea, QDialog, QScrollArea, QDialog
 )
 from PyQt6.QtGui import QBrush, QColor, QPen, QPainterPath, QFont, QPainter, QIcon
 from PyQt6.QtCore import Qt, QRectF, QPointF
-from PyQt6.QtCore import QTimer, Qt
-import serial
-import serial.tools.list_ports
+from rudiron import upload_to_board, reset_arduino
+
 import keyword
 import re
+
 # PINS = list(range(0, 18)) + list(range(20, 27)) + list(range(28, 36))
 PINS = list(range(0, 36))
 # Список ключевых слов C++
@@ -30,26 +31,20 @@ cpp_keywords = {
     "wchar_t", "while", "xor", "xor_eq"
 }
 
+
 def is_valid_analog_pin(pin):
-    if isinstance(pin, int) or pin.is_digit():
-        return 21 <= pin <= 26
-    pattern = r"^PIN\d+$"
-    if not re.match(pattern, pin):
-        return False
-    return is_valid_analog_pin(int(pin[3:]))
+    return True
+
 
 def is_valid_digital_pin(pin):
-    if isinstance(pin, int) or pin.is_digit():
-        return 0 <= pin <= 35
-    pattern = r"^PIN\d+$"
-    if not re.match(pattern, pin):
-        return False
-    return is_valid_digital_pin(int(pin[3:]))
+    return True
+
 
 def is_valid_integer(value):
     # Регулярное выражение для целых чисел
     pattern = r'^[+-]?\d+$'
     return bool(re.match(pattern, value))
+
 
 def is_valid_cpp_variable_name(name):
     # Проверяем, что имя не является ключевым словом C++
@@ -62,15 +57,18 @@ def is_valid_cpp_variable_name(name):
         return True
     return False
 
+
 # Пример использования
 test_names = ["variable", "2variable", "_variable", "int", "var_123"]
 for name in test_names:
     print(f"{name}: {'Valid' if is_valid_cpp_variable_name(name) else 'Invalid'}")
 
-declared_variables = set() # should fix it, temp impl
+declared_variables = set()  # should fix it, temp impl
+
 
 def is_valid_integer_or_var(text):
     return is_valid_integer(text) or text in declared_variables
+
 
 def show_message_box(text, title="Внимание"):
     message_box = QMessageBox()
@@ -79,6 +77,7 @@ def show_message_box(text, title="Внимание"):
     message_box.setStandardButtons(QMessageBox.StandardButton.Yes)
     message_box.setIcon(QMessageBox.Icon.Warning)
     message_box.exec()
+
 
 class PopupWindow(QDialog):
     def __init__(self, title, text, width=300, height=50):
@@ -98,7 +97,7 @@ class PopupWindow(QDialog):
         layout.addWidget(close_button)
         self.setLayout(layout)
 
-    
+
 class Block(QGraphicsPathItem):
     def __init__(self, text, color, parent=None):
         super().__init__(parent)
@@ -145,6 +144,14 @@ class Block(QGraphicsPathItem):
         self.setBrush(QBrush(self.color))
         self.setPen(QPen(Qt.GlobalColor.black))
 
+        # Add text
+        # self.text_item = QGraphicsTextItem(self.text, self)
+        # font = QFont('Arial', 12)
+        # self.text_item.setFont(font)
+        # text_rect = self.text_item.boundingRect()
+        # self.text_item.setPos(
+        #     (width - text_rect.width()) / 2, (height - text_rect.height()) / 2)
+
     def mousePressEvent(self, event):
         # Set focus to the workspace
         if self.scene().views():
@@ -162,8 +169,21 @@ class Block(QGraphicsPathItem):
             # Store the scene positions
             self.initial_positions[block] = block.mapToScene(QPointF(0, 0))
 
-        super().mousePressEvent(event)
+        # # Disconnect from previous and next blocks depending on where the block is grabbed
+        # if self.dragging_from_top:
+        #     if self.prev_block:
+        #         self.prev_block.next_block = None
+        #         self.prev_block = None
+        # else:
+        #     if self.next_block:
+        #         self.next_block.prev_block = None
+        #         self.next_block = None
 
+        # # If the block is inside a control block, we need to detach it temporarily
+        # if self.parent_block:
+        #     self.parent_block.remove_child_block(self)
+
+        super().mousePressEvent(event)
 
     def find_head(self):
         head = self
@@ -176,7 +196,6 @@ class Block(QGraphicsPathItem):
         while tail.next_block:
             tail = tail.next_block
         return tail
-
 
     def mouseMoveEvent(self, event):
         super().mouseMoveEvent(event)
@@ -246,6 +265,43 @@ class Block(QGraphicsPathItem):
                     stack.append(block.next_block)
         return blocks
 
+    # def check_for_snap(self):
+    #     # Reset any previous highlighted block
+    #     if self.highlighted_block:
+    #         self.highlighted_block.setPen(QPen(Qt.GlobalColor.black))
+    #         self.highlighted_block = None
+
+    #     # Highlight potential snap targets
+    #     colliding_items = self.scene().collidingItems(self)
+
+    #     # Filter out child items and self
+    #     connected_blocks = self.get_all_connected_blocks()
+    #     colliding_items = [item for item in colliding_items if item != self and not self.is_descendant_of(item) and item not in connected_blocks]
+
+    #     for item in colliding_items:
+    #         if isinstance(item, ControlBlock):
+    #             if item.is_open_area(self.scenePos()):
+    #                 item.setPen(QPen(QColor('purple'), 2))
+    #                 self.highlighted_block = item
+    #                 return
+    #             else:
+    #                 if self.dragging_from_top and self.is_near(item, above=True):
+    #                     item.setPen(QPen(QColor('green'), 2))
+    #                     self.highlighted_block = item
+    #                     return
+    #                 elif not self.dragging_from_top and self.is_near(item, below=True):
+    #                     item.setPen(QPen(QColor('blue'), 2))
+    #                     self.highlighted_block = item
+    #                     return
+    #         elif isinstance(item, Block):
+    #             if self.dragging_from_top and self.is_near(item, above=True):
+    #                 item.setPen(QPen(QColor('green'), 2))
+    #                 self.highlighted_block = item
+    #                 return
+    #             elif not self.dragging_from_top and self.is_near(item, below=True):
+    #                 item.setPen(QPen(QColor('blue'), 2))
+    #                 self.highlighted_block = item
+    #                 return
 
     def check_for_snap(self):
         # Reset any previous highlighted block
@@ -258,7 +314,8 @@ class Block(QGraphicsPathItem):
 
         # Filter out child items and self
         connected_blocks = self.get_all_connected_blocks()
-        colliding_items = [item for item in colliding_items if item != self and not self.is_descendant_of(item) and item not in connected_blocks]
+        colliding_items = [item for item in colliding_items if
+                           item != self and not self.is_descendant_of(item) and item not in connected_blocks]
 
         for item in colliding_items:
             if isinstance(item, ControlBlock):
@@ -267,25 +324,23 @@ class Block(QGraphicsPathItem):
                     self.highlighted_block = item
                     return
                 else:
-                    if  self.is_near(item, above=True):
+                    if self.is_near(item, above=True):
                         item.setPen(QPen(QColor('green'), 2))
                         self.highlighted_block = item
                         return
-                    elif  self.is_near(item, below=True):
+                    elif self.is_near(item, below=True):
                         item.setPen(QPen(QColor('blue'), 2))
                         self.highlighted_block = item
                         return
             elif isinstance(item, Block):
-                if  self.is_near(item, above=True):
+                if self.is_near(item, above=True):
                     item.setPen(QPen(QColor('green'), 2))
                     self.highlighted_block = item
                     return
-                elif  self.is_near(item, below=True):
+                elif self.is_near(item, below=True):
                     item.setPen(QPen(QColor('blue'), 2))
                     self.highlighted_block = item
                     return
-
-
 
     def is_descendant_of(self, item):
         # Check if self is a child or descendant of the given item
@@ -302,16 +357,77 @@ class Block(QGraphicsPathItem):
             # Check if the bottom of self is near the top of other_block
             self_bottom = self.sceneBoundingRect().bottom()
             other_top = other_block.sceneBoundingRect().top()
-            if abs(self_bottom - other_top) < threshold and abs(self.scenePos().x() - other_block.scenePos().x()) < threshold:
+            if abs(self_bottom - other_top) < threshold and abs(
+                    self.scenePos().x() - other_block.scenePos().x()) < threshold:
                 return True
         if below:
             # Check if the top of self is near the bottom of other_block
             self_top = self.sceneBoundingRect().top()
             other_bottom = other_block.sceneBoundingRect().bottom()
-            if abs(self_top - other_bottom) < threshold and abs(self.scenePos().x() - other_block.scenePos().x()) < threshold:
+            if abs(self_top - other_bottom) < threshold and abs(
+                    self.scenePos().x() - other_block.scenePos().x()) < threshold:
                 return True
         return False
 
+    # def snap_to_block(self):
+    #     if self.highlighted_block:
+    #         # Reset pen of the highlighted block
+    #         self.highlighted_block.setPen(QPen(Qt.GlobalColor.black))
+
+    #         # Disconnect any existing connections
+    #         # Only disconnect if not snapping into a control block
+    #         # if not (isinstance(self.highlighted_block, ControlBlock) and self.highlighted_block.is_open_area(self.scenePos())):
+    #         #     self.disconnect_blocks()
+
+    #         if isinstance(self.highlighted_block, ControlBlock) and self.highlighted_block.is_open_area(self.scenePos()):
+    #             # Snap into the control block
+    #             if len(self.highlighted_block.child_blocks):
+    #                 self.highlighted_block.child_blocks[-1].next_block = self
+    #                 self.prev_block = self.highlighted_block.child_blocks[-1]
+    #             self.highlighted_block.add_child_blocks(self)
+    #         else:
+    #             if self.dragging_from_top and self.is_near(self.highlighted_block, above=True):
+    #                 if self.highlighted_block.prev_block is not None and self.highlighted_block.prev_block != self:
+    #                     self.prev_block = self.highlighted_block.prev_block
+    #                     self.highlighted_block.prev_block.next_block = self
+    #                     self.prev_block.move_up(self.boundingRect().height())
+    #                 # Snap the bottom of self to the top of the highlighted block
+    #                 self.next_block = self.highlighted_block
+    #                 self.highlighted_block.prev_block = self
+
+    #                 # Align positions
+    #                 new_x = self.highlighted_block.scenePos().x()
+    #                 new_y = self.highlighted_block.scenePos().y() - self.boundingRect().height() + 2
+    #                 self.setPos(new_x, new_y)
+    #                 prev_block = self.prev_block
+    #                 while prev_block is not None:
+    #                     if prev_block.parent_block is not None:
+    #                         prev_block.parent_block.add_child_blocks(self)
+    #                     prev_block = prev_block.prev_block
+    #             elif not self.dragging_from_top and self.is_near(self.highlighted_block, below=True):
+    #                 print(self.highlighted_block)
+    #                 if self.highlighted_block.next_block is not None and self.highlighted_block.next_block != self:
+    #                     self.next_block = self.highlighted_block.next_block
+    #                     self.highlighted_block.next_block.prev_block = self
+    #                     self.next_block.move_down(self.boundingRect().height(), False)
+    #                 # Snap the top of self to the bottom of the highlighted block
+    #                 self.prev_block = self.highlighted_block
+    #                 self.highlighted_block.next_block = self
+
+    #                 # Align positions
+    #                 new_x = self.highlighted_block.scenePos().x()
+    #                 new_y = self.highlighted_block.scenePos().y() + self.highlighted_block.boundingRect().height() - 2
+    #                 self.setPos(new_x, new_y)
+    #                 prev_block = self.prev_block
+    #                 while prev_block is not None:
+    #                     if prev_block.parent_block is not None:
+    #                         prev_block.parent_block.add_child_blocks(self)
+    #                     prev_block = prev_block.parent_block
+
+    #         self.highlighted_block = None
+    #     else:
+    #         # If not snapped to anything, ensure the block is standalone
+    #         pass  # Do not disconnect here to maintain existing connections
     def reposition_next_blocks(self):
         y_offset = self.height + self.y()
         current = self.next_block
@@ -332,12 +448,18 @@ class Block(QGraphicsPathItem):
                 current.reposition_child_blocks()
             current = current.prev_block
 
-    
     def snap_to_block(self):
         if self.highlighted_block:
             # Reset pen of the highlighted block
             self.highlighted_block.setPen(QPen(Qt.GlobalColor.black))
-            if isinstance(self.highlighted_block, ControlBlock) and self.highlighted_block.is_open_area(self.scenePos()):
+
+            # Disconnect any existing connections
+            # Only disconnect if not snapping into a control block
+            # if not (isinstance(self.highlighted_block, ControlBlock) and self.highlighted_block.is_open_area(self.scenePos())):
+            #     self.disconnect_blocks()
+
+            if isinstance(self.highlighted_block, ControlBlock) and self.highlighted_block.is_open_area(
+                    self.scenePos()):
                 # Snap into the control block
                 if len(self.highlighted_block.child_blocks):
                     self.highlighted_block.child_blocks[-1].next_block = self
@@ -389,24 +511,23 @@ class Block(QGraphicsPathItem):
             pass  # Do not disconnect here to maintain existing connections
 
     def move_up(self, delta_y=20, move_parent_block=False):
-            """
-            Moves the block upward by delta_y pixels.
-            Also moves all connected previous blocks accordingly.
-            """
-            if self.parent_block and move_parent_block:
-                # If the block is nested inside a control block, move the entire control block
-                self.parent_block.move_up(delta_y)
-                return
+        """
+        Moves the block upward by delta_y pixels.
+        Also moves all connected previous blocks accordingly.
+        """
+        if self.parent_block and move_parent_block:
+            # If the block is nested inside a control block, move the entire control block
+            self.parent_block.move_up(delta_y)
+            return
 
-            # Move this block
-            current_pos = self.scenePos()
-            new_pos = QPointF(current_pos.x(), current_pos.y() - delta_y)
-            self.setPos(new_pos)
+        # Move this block
+        current_pos = self.scenePos()
+        new_pos = QPointF(current_pos.x(), current_pos.y() - delta_y)
+        self.setPos(new_pos)
 
-            # Move connected next blocks
-            if self.prev_block is not None:
-                self.prev_block.move_up(delta_y)
-
+        # Move connected next blocks
+        if self.prev_block is not None:
+            self.prev_block.move_up(delta_y)
 
     def move_down(self, delta_y=20, move_parent_block=False):
         """
@@ -469,6 +590,7 @@ class Block(QGraphicsPathItem):
     def suicide(self):
         self.disconnect_blocks()
         self.scene().removeItem(self)
+
 
 class ControlBlock(Block):
     def __init__(self, text, color, parent=None):
@@ -610,6 +732,7 @@ class ControlBlock(Block):
     def snap_to_block(self):
         super().snap_to_block()
 
+
 class StartBlock(Block):
     start_block = None
 
@@ -640,6 +763,7 @@ class StartBlock(Block):
     def suicide(self):
         StartBlock.start_block = None
         super().suicide()
+
 
 class VariableBlock(Block):
     def __init__(self, text, color, parent=None):
@@ -679,14 +803,16 @@ class VariableBlock(Block):
         self.text_field_proxy.setWidget(self.text_field2)
         self.text_field_proxy.setParentItem(self)
         text_rect_2 = self.text_field_proxy.boundingRect()
-        self.text_field_proxy.setPos(delta * 2 + text_rect.width() + int(delta * 2 * 1.5) + text_rect_1.width(), (self.height - text_rect_2.height()) / 2)
+        self.text_field_proxy.setPos(delta * 2 + text_rect.width() + int(delta * 2 * 1.5) + text_rect_1.width(),
+                                     (self.height - text_rect_2.height()) / 2)
 
     def generate_code(self, recursion_depth=0):
         if self.text_field1.text() == "" or not is_valid_cpp_variable_name(self.text_field1.text()):
             show_message_box(f"Название переменной '{self.text_field1.text()}' некорректно!")
             return None
         if not is_valid_integer_or_var(self.text_field2.text()):
-            show_message_box(f"Значение переменной '{self.text_field1.text()}' должно быть целым числом или переменной!")
+            show_message_box(
+                f"Значение переменной '{self.text_field1.text()}' должно быть целым числом или переменной!")
             return None
         if self.text_field1.text() in declared_variables:
             show_message_box(f"Переменная '{self.text_field1.text()}' объявлена несколько раз!")
@@ -700,6 +826,7 @@ class VariableBlock(Block):
                 return None
             return program + result
         return program
+
 
 class ArithmeticBlock(Block):
     def __init__(self, text, color, parent=None):
@@ -739,9 +866,10 @@ class ArithmeticBlock(Block):
         self.text_field_proxy.setWidget(self.text_field2)
         self.text_field_proxy.setParentItem(self)
         text_rect_2 = self.text_field_proxy.boundingRect()
-        self.text_field_proxy.setPos(int(delta * 1.5) + text_rect.width() + delta * 0 + text_rect_1.width(), (self.height - text_rect_2.height()) / 2)
+        self.text_field_proxy.setPos(int(delta * 1.5) + text_rect.width() + delta * 0 + text_rect_1.width(),
+                                     (self.height - text_rect_2.height()) / 2)
 
-        #Add combo box
+        # Add combo box
         self.combo_box = QComboBox()
         self.combo_box.addItems(['*', '-', '+', '/', '//', '%'])
         self.combo_box.setFont(QFont('Arial', 8))
@@ -751,7 +879,8 @@ class ArithmeticBlock(Block):
         text_rect3 = self.combo_box_proxy.boundingRect()
         self.combo_box_proxy.setParentItem(self)
         self.combo_box_proxy.setPos(
-            int(delta * 1.0) + text_rect.width() + delta * 0 + text_rect_1.width() + text_rect3.width(), (text_rect3.height()) / 2)
+            int(delta * 1.0) + text_rect.width() + delta * 0 + text_rect_1.width() + text_rect3.width(),
+            (text_rect3.height()) / 2)
         self.combo_box_proxy.setZValue(2)
 
         #
@@ -763,26 +892,29 @@ class ArithmeticBlock(Block):
         self.text_field_proxy.setParentItem(self)
         text_rect_2 = self.text_field_proxy.boundingRect()
         self.text_field_proxy.setPos(
-            int(delta * 2) + text_rect.width() + delta * 2 + text_rect_1.width() + text_rect3.width() + text_rect_2.width(), (self.height - text_rect_2.height()) / 2)
+            int(delta * 2) + text_rect.width() + delta * 2 + text_rect_1.width() + text_rect3.width() + text_rect_2.width(),
+            (self.height - text_rect_2.height()) / 2)
 
     def generate_code(self, recursion_depth=0):
         program = '{} = {} {} {};'
         if self.text_field1.text() not in declared_variables:
             show_message_box(f"Переменная {self.text_field1.text()} не объявлена!")
             return None
-        if not is_valid_integer_or_var( self.text_field2.text()):
+        if not is_valid_integer_or_var(self.text_field2.text()):
             show_message_box(f"Значение левого операнда должно быть целым числом или переменной!")
             return None
-        if not is_valid_integer_or_var( self.text_field3.text()):
+        if not is_valid_integer_or_var(self.text_field3.text()):
             show_message_box(f"Значение правого операнда должно быть целым числом или переменной!")
             return None
-        program = program.format(self.text_field1.text(), self.text_field2.text(), self.combo_box.currentText(), self.text_field3.text())
+        program = program.format(self.text_field1.text(), self.text_field2.text(), self.combo_box.currentText(),
+                                 self.text_field3.text())
         if self.next_block:
             result = self.next_block.generate_code(recursion_depth)
             if result is None:
                 return None
             return program + result
         return program
+
 
 class DelayBlock(Block):
     def __init__(self, text, color, parent=None):
@@ -827,6 +959,7 @@ class DelayBlock(Block):
                 return None
             return program + result
         return program
+
 
 class ControlBlock(Block):
     def __init__(self, text, color, parent=None):
@@ -983,6 +1116,7 @@ class ControlBlock(Block):
     def snap_to_block(self):
         super().snap_to_block()
 
+
 class ConditionBlock(ControlBlock):
     def __init__(self, text, color, parent=None):
         super().__init__(text, color, parent)
@@ -1006,7 +1140,7 @@ class ConditionBlock(ControlBlock):
         self.text_field_proxy.setPos(
             (self.width - text_rect.width()) / 10, (text_rect.height()) / 2)
 
-       #Add combo box
+        # Add combo box
         self.combo_box = QComboBox()
         self.combo_box.addItems(['==', '!=', '>', '>=', '<', '<='])
         self.combo_box.setFont(QFont('Arial', 10))
@@ -1055,6 +1189,7 @@ class ConditionBlock(ControlBlock):
             return program + result
         return program
 
+
 class ForCycleBlock(ControlBlock):
     def __init__(self, text, color, parent=None):
         super().__init__(text, color, parent)
@@ -1090,7 +1225,8 @@ class ForCycleBlock(ControlBlock):
         font = QFont('Arial', 14)
         self.text_item.setFont(font)
         text_rect = self.text_item.boundingRect()
-        self.text_item.setPos((delta * 4 + self.width - text_rect.width()) // 2 + text_rect2.width(), (text_rect.height()) // 2 - delta * 2)
+        self.text_item.setPos((delta * 4 + self.width - text_rect.width()) // 2 + text_rect2.width(),
+                              (text_rect.height()) // 2 - delta * 2)
 
     def generate_code(self, recursion_depth=0):
 
@@ -1115,6 +1251,7 @@ class ForCycleBlock(ControlBlock):
             return program + result
         return program
 
+
 class WhileCycleBlock(ControlBlock):
     def __init__(self, text, color, parent=None):
         super().__init__(text, color, parent)
@@ -1138,7 +1275,7 @@ class WhileCycleBlock(ControlBlock):
         self.text_field_proxy.setPos(
             (self.width - text_rect.width()) / 10, (text_rect.height()) / 2)
 
-       #Add combo box
+        # Add combo box
         self.combo_box = QComboBox()
         self.combo_box.addItems(['==', '!=', '>', '>=', '<', '<='])
         self.combo_box.setFont(QFont('Arial', 10))
@@ -1189,6 +1326,7 @@ class WhileCycleBlock(ControlBlock):
             return program + result
         return program
 
+
 class DigitalReadBlock(Block):
     def __init__(self, text, color, parent=None):
         super().__init__(text, color, parent)
@@ -1230,6 +1368,7 @@ class DigitalReadBlock(Block):
         text_rect_2 = self.text_field_proxy.boundingRect()
         self.text_field_proxy.setPos((self.width - text_rect.width()) / 10 * 9,
                                      (self.height - text_rect_2.height()) / 2)
+
     def generate_code(self, recursion_depth=0):
         if self.text_field1.text() not in declared_variables:
             show_message_box("Необходимо указать корректную переменную для записи результата цифрового чтения!")
@@ -1245,6 +1384,7 @@ class DigitalReadBlock(Block):
                 return None
             return program + result
         return program
+
 
 class AnalogReadBlock(Block):
     def __init__(self, text, color, parent=None):
@@ -1304,6 +1444,7 @@ class AnalogReadBlock(Block):
             return program + result
         return program
 
+
 class DigitalWriteBlock(Block):
     def __init__(self, text, color, parent=None):
         super().__init__(text, color, parent)
@@ -1343,17 +1484,19 @@ class DigitalWriteBlock(Block):
         self.combo_box_proxy.setWidget(self.combo_box)
         text_rect_3 = self.combo_box_proxy.boundingRect()
         self.combo_box_proxy.setParentItem(self)
-        self.combo_box_proxy.setPos(delta * 2 + text_rect.width() + delta + text_rect_2.width() + delta, (self.height - text_rect_2.height()) / 2)
+        self.combo_box_proxy.setPos(delta * 2 + text_rect.width() + delta + text_rect_2.width() + delta,
+                                    (self.height - text_rect_2.height()) / 2)
 
     def generate_code(self, recursion_depth=0):
         program = super().generate_code(recursion_depth)
-        program = program.format(self.text_field.text(), self.combo_box.currentText)
+        program = program.format(self.text_field.text(), self.combo_box.currentText())
         if self.next_block:
             result = self.next_block.generate_code(recursion_depth)
             if result is None:
                 return None
             return program + result
         return program
+
 
 class AnalogWriteBlock(Block):
     def __init__(self, text, color, parent=None):
@@ -1395,7 +1538,7 @@ class AnalogWriteBlock(Block):
         self.text_field_proxy.setParentItem(self)
         text_rect_3 = self.text_field_proxy.boundingRect()
         self.text_field_proxy.setPos(delta * 2 + text_rect.width() + delta + text_rect_2.width() + delta,
-                                    (self.height - text_rect_2.height()) / 2)
+                                     (self.height - text_rect_2.height()) / 2)
 
     def generate_code(self, recursion_depth=0):
         program = super().generate_code(recursion_depth)
@@ -1406,6 +1549,7 @@ class AnalogWriteBlock(Block):
                 return None
             return program + result
         return program
+
 
 class SerialReadBlock(Block):
     def __init__(self, text, color, parent=None):
@@ -1438,6 +1582,7 @@ class SerialReadBlock(Block):
             return program + result
         return program
 
+
 class SerialWriteBlock(Block):
     def __init__(self, text, color, parent=None):
         super().__init__(text, color, parent)
@@ -1469,7 +1614,6 @@ class SerialWriteBlock(Block):
         text_rect_2 = self.text_field_proxy.boundingRect()
         self.text_field_proxy.setPos(int(delta * 2 + text_rect.width()), (self.height - text_rect_2.height()) / 2)
 
-
     def generate_code(self, recursion_depth=0):
         program = super().generate_code(recursion_depth)
         program = program.format(self.text_field.text())
@@ -1479,6 +1623,7 @@ class SerialWriteBlock(Block):
                 return None
             return program + result
         return program
+
 
 class Workspace(QGraphicsView):
     def __init__(self, parent=None):
@@ -1529,27 +1674,29 @@ class Workspace(QGraphicsView):
         else:
             super().mouseReleaseEvent(event)
 
+
 class BlockPalette(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         self.parent = parent
-        blocks = ['Начало', 'Переменные', 'Арифметика', 'Сон', 'Условие', 'Повтор', 'Цикл', 'ЦЧтение', 'АЧтение', 'ЦЗапись',
+        blocks = ['Начало', 'Переменные', 'Арифметика', 'Сон', 'Условие', 'Повтор', 'Цикл', 'ЦЧтение', 'АЧтение',
+                  'ЦЗапись',
                   'АЗапись', 'Читать\nсерийный порт', 'Запись\nв серийный порт']
         colors = [
             QColor('#ff3386'),
             QColor('#FF5733'),
-            QColor('#FF5733'),
-            QColor('#FF5733'),
+            QColor('#00FFFF'),
+            QColor('#FF00FF'),
             QColor('#33FF57'),
             QColor('#3357FF'),
             QColor('#F1C40F'),
             QColor('#9B59B6'),
-            QColor('#9B59B6'),
-            QColor('#9B59B6'),
-            QColor('#9B59B6'),
-            QColor('#9B59B6'),
-            QColor('#9B59B6')
+            QColor('#FF69B4'),
+            QColor('#8B00FF'),
+            QColor('#BFFF00'),
+            QColor('#40E0D0'),
+            QColor('#FFD700')
         ]
 
         for text, color in zip(blocks, colors):
@@ -1630,172 +1777,6 @@ class PinConfigurationWidget(QWidget):
         pin_numbers = sorted(self.pin_comboboxes.keys())
         pin_configs = [self.pin_comboboxes[pin].currentText() for pin in pin_numbers]
         return pin_configs
-    
-class SerialReaderWidget(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.serial_port = None
-        self.init_ui()
-        self.setup_timer()
-    
-    def init_ui(self):
-        # Основные макеты
-        main_layout = QVBoxLayout()
-        port_layout = QHBoxLayout()
-        send_layout = QHBoxLayout()
-        
-        # Выбор последовательного порта
-        self.port_label = QLabel("Последовательный порт:")
-        self.port_combo = QComboBox()
-        self.refresh_button = QPushButton("Обновить")
-        self.refresh_button.clicked.connect(self.refresh_serial_ports)
-        self.connect_button = QPushButton("Подключиться")
-        self.connect_button.clicked.connect(self.toggle_connection)
-        
-        # Добавление элементов в портовый макет
-        port_layout.addWidget(self.port_label)
-        port_layout.addWidget(self.port_combo)
-        port_layout.addWidget(self.refresh_button)
-        port_layout.addWidget(self.connect_button)
-        
-        # Текстовая область для отображения полученных данных
-        self.text_area = QTextEdit()
-        self.text_area.setReadOnly(True)
-        self.text_area.setPlaceholderText("Полученные данные будут отображаться здесь...")
-        
-        # Поле ввода и кнопка для отправки данных
-        self.send_input = QLineEdit()
-        self.send_input.setPlaceholderText("Введите данные для отправки...")
-        self.send_input.returnPressed.connect(self.send_serial_data)  # Отправка при нажатии Enter
-        
-        self.send_button = QPushButton("Отправить")
-        self.send_button.clicked.connect(self.send_serial_data)
-        self.send_button.setEnabled(False)  # Отключена до подключения
-        
-        # Добавление элементов в отправочный макет
-        send_layout.addWidget(self.send_input)
-        send_layout.addWidget(self.send_button)
-        
-        # Добавление всех макетов в основной макет
-        main_layout.addLayout(port_layout)
-        main_layout.addWidget(self.text_area)
-        main_layout.addLayout(send_layout)
-        
-        self.setLayout(main_layout)
-        self.setWindowTitle("Serial Reader Widget")
-        self.resize(600, 400)
-        
-        # Инициальное обновление списка портов
-        self.refresh_serial_ports()
-    
-    def setup_timer(self):
-        """Настройка таймера для периодического чтения данных из порта."""
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.read_serial_data)
-        self.timer.start(1000)  # Проверка каждые 1 секунду
-    
-    def refresh_serial_ports(self):
-        """Обновление списка доступных последовательных портов."""
-        self.port_combo.clear()
-        ports = serial.tools.list_ports.comports()
-        for port in ports:
-            self.port_combo.addItem(port.device)
-        
-        if not ports:
-            self.port_combo.addItem("Порты не найдены")
-            self.connect_button.setEnabled(False)
-            self.send_button.setEnabled(False)
-            QMessageBox.warning(self, "Порты не найдены", "Доступные последовательные порты не обнаружены.")
-        else:
-            self.connect_button.setEnabled(True)
-    
-    def toggle_connection(self):
-        """Переключение состояния подключения."""
-        if self.serial_port and self.serial_port.is_open:
-            self.disconnect_serial()
-        else:
-            self.connect_serial()
-    
-    def connect_serial(self):
-        """Подключение к выбранному последовательному порту."""
-        selected_port = self.port_combo.currentText()
-        if selected_port == "Порты не найдены":
-            QMessageBox.warning(self, "Ошибка подключения", "Доступные последовательные порты не найдены.")
-            return
-        try:
-            self.serial_port = serial.Serial(
-                port=selected_port,
-                baudrate=9600,      # Настройте скорость передачи по необходимости
-                timeout=1,
-                bytesize=serial.EIGHTBITS,
-                parity=serial.PARITY_NONE,
-                stopbits=serial.STOPBITS_ONE
-            )
-            if self.serial_port.is_open:
-                self.connect_button.setText("Отключиться")
-                self.send_button.setEnabled(True)
-                self.text_area.append(f"Подключено к {selected_port}\n")
-        except serial.SerialException as e:
-            QMessageBox.critical(self, "Ошибка подключения", f"Не удалось подключиться к {selected_port}.\n\nОшибка: {e}")
-            self.connect_button.setEnabled(False)
-            self.send_button.setEnabled(False)
-            self.serial_port = None
-    
-    def disconnect_serial(self):
-        """Отключение от последовательного порта."""
-        if self.serial_port and self.serial_port.is_open:
-            self.serial_port.close()
-            self.connect_button.setText("Подключиться")
-            self.send_button.setEnabled(False)
-            self.text_area.append("Отключено от последовательного порта.\n")
-    
-    def read_serial_data(self):
-        print("timer")
-        """Чтение данных из последовательного порта и отображение их в текстовой области."""
-        if self.serial_port and self.serial_port.is_open:
-            try:
-                # if self.serial_port.in_waiting or True:
-                data = self.serial_port.read_all()  .decode('utf-8', errors='replace').strip()
-                if data:
-                    self.text_area.append(data)
-                    # Автопрокрутка вниз
-                    self.text_area.verticalScrollBar().setValue(
-                        self.text_area.verticalScrollBar().maximum()
-                    )
-            except serial.SerialException as e:
-                self.text_area.append(f"Ошибка последовательного порта: {e}\n")
-                QMessageBox.critical(self, "Ошибка последовательного порта", f"Произошла ошибка при чтении данных.\n\nОшибка: {e}")
-                self.disconnect_serial()
-            except Exception as e:
-                self.text_area.append(f"Неожиданная ошибка: {e}\n")
-                QMessageBox.critical(self, "Неожиданная ошибка", f"Произошла неожиданная ошибка.\n\nОшибка: {e}")
-    
-    def send_serial_data(self):
-        """Отправка данных через последовательный порт."""
-        if self.serial_port and self.serial_port.is_open:
-            data = self.send_input.text()
-            if data:
-                try:
-                    # Добавляем символ перевода строки, если требуется
-                    self.serial_port.write((data + '\n').encode('utf-8'))
-                    self.text_area.append(f"Отправлено: {data}")
-                    self.send_input.clear()
-                except serial.SerialException as e:
-                    self.text_area.append(f"Ошибка отправки данных: {e}\n")
-                    QMessageBox.critical(self, "Ошибка отправки", f"Не удалось отправить данные.\n\nОшибка: {e}")
-                    self.disconnect_serial()
-                except Exception as e:
-                    self.text_area.append(f"Неожиданная ошибка при отправке данных: {e}\n")
-                    QMessageBox.critical(self, "Неожиданная ошибка", f"Произошла неожиданная ошибка при отправке данных.\n\nОшибка: {e}")
-        else:
-            QMessageBox.warning(self, "Не подключено", "Пожалуйста, подключитесь к последовательному порту перед отправкой данных.")
-    
-    def closeEvent(self, event):
-        """Корректное закрытие соединения при закрытии виджета."""
-        if self.serial_port and self.serial_port.is_open:
-            self.serial_port.close()
-        event.accept()
-
 
 
 class MainWindow(QWidget):
@@ -1807,11 +1788,7 @@ class MainWindow(QWidget):
         self.setupUI()
 
     def setupUI(self):
-        # Основной вертикальный макет
-        main_layout = QVBoxLayout(self)
-
-        # Верхний горизонтальный макет для существующих компонентов
-        top_layout = QHBoxLayout()
+        main_layout = QHBoxLayout(self)
 
         # Block Palette
         self.palette = BlockPalette(self)
@@ -1824,65 +1801,54 @@ class MainWindow(QWidget):
         self.run_button.setStyleSheet('font-size: 16px; height: 40px;')
         self.run_button.clicked.connect(self.run_program)
 
-        # Размещение элементов слева
+        # Arrange layouts
         left_layout = QVBoxLayout()
         left_layout.addWidget(QLabel('<h2>Blocks</h2>'))
         left_layout.addWidget(self.palette)
         left_layout.addStretch()
         left_layout.addWidget(self.run_button)
 
-        # Pin Configuration Widget
         self.pin_config_widget = PinConfigurationWidget()
 
-        # Добавление в верхний горизонтальный макет
-        top_layout.addLayout(left_layout)
-        top_layout.addWidget(self.workspace)
-        top_layout.addWidget(self.pin_config_widget)
-
-        # Добавление верхнего макета в основной вертикальный макет
-        main_layout.addLayout(top_layout)
-
-        # Создание и добавление SerialReaderWidget в нижнюю часть
-        self.serial_reader = SerialReaderWidget(self)
-        main_layout.addWidget(self.serial_reader)
+        # Arrange layouts
+        main_layout.addLayout(left_layout)
+        main_layout.addWidget(self.workspace)
+        main_layout.addWidget(self.pin_config_widget)
 
         self.setLayout(main_layout)
 
     def run_program(self):
         global declared_variables
         declared_variables = set()
-        # Найти все верхнеуровневые блоки
+        # Find all top-level blocks
         block = [item for item in self.workspace.scene().items()
                  if isinstance(item, StartBlock)]
-        # Сортировка блоков по вертикальной позиции
+        # Sort blocks by their vertical position
         if len(block) == 0:
             QMessageBox.information(self, "Program", f"Для запуска программы необходим блок 'Начало'")
             return
+        reset_arduino("COM3")
         rudiron_code = block[0].generate_code()
-        # Отображение или выполнение кода
+        # Display or execute the code
         if rudiron_code is None:
             return
 
-        # Получение конфигураций пинов
+        # Get the pin configurations
         pin_configs = self.pin_config_widget.get_pin_configurations()
-        print("Pin Configurations:")
         pin_numbers = sorted(self.pin_config_widget.pin_comboboxes.keys())
+        pin_init = ""
         for pin, config in zip(pin_numbers, pin_configs):
-            print(f"Pin{pin}: {config}")
-
+            pin_init += f"pinMode({pin}, {config});\n"
         QMessageBox.information(
             self, "Program", f"Ваша программа успешно сгенерированна!")
-        # Здесь можно добавить код для отправки 'rudiron_code' на контроллер Rudiron
-        rendered_rudiron_code = "void setup(){"
-        rendered_rudiron_code += "Serial.begin(9600);"
-        rendered_rudiron_code += "delay(10);"
-        for i in PINS:
-            rendered_rudiron_code += f"pinMode(PIN{i}, {self.pin_config_widget.pin_comboboxes[i].currentText()});\n"
-        rendered_rudiron_code += rudiron_code
-        rendered_rudiron_code += "}"
+        rendered_rudiron_code = f"void setup() {{\n{pin_init}{rudiron_code}}}\nvoid loop(){{}}"
         print(rendered_rudiron_code)
-        with open("temp.ino", "w") as file:
+        if not os.path.isdir("temp"):
+            os.mkdir("temp")
+        with open(os.path.abspath(os.curdir) + "\\temp\\temp.ino", "w") as file:
             file.write(rendered_rudiron_code)
+        upload_to_board("COM3")
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
