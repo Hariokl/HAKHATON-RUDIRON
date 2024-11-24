@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QBrush, QColor, QPen, QPainterPath, QFont, QPainter, QIcon
 from PyQt6.QtCore import Qt, QRectF, QPointF
 
+
 class Block(QGraphicsPathItem):
     def __init__(self, text, color, parent=None):
         super().__init__(parent)
@@ -94,20 +95,6 @@ class Block(QGraphicsPathItem):
 
         super().mousePressEvent(event)
 
-
-    def find_head(self):
-        head = self
-        while head.prev_block:
-            head = head.prev_block
-        return head
-
-    def find_tail(self):
-        tail = self
-        while tail.next_block:
-            tail = tail.next_block
-        return tail
-
-
     def mouseMoveEvent(self, event):
         super().mouseMoveEvent(event)
 
@@ -127,17 +114,12 @@ class Block(QGraphicsPathItem):
                     block.setPos(parent_pos)
                 else:
                     block.setPos(initial_pos + delta)
-        head, tail = self.find_head(), self.find_tail()
-        head.check_for_snap()
-        tail.check_for_snap()
-        # self.check_for_snap()
+
+        self.check_for_snap()
 
     def mouseReleaseEvent(self, event):
         super().mouseReleaseEvent(event)
-        head, tail = self.find_head(), self.find_tail()
-        head.snap_to_block()
-        tail.snap_to_block()
-        # self.snap_to_block()
+        self.snap_to_block()
 
     def mouseDoubleClickEvent(self, event):
         # Disconnect from previous and next blocks
@@ -187,8 +169,7 @@ class Block(QGraphicsPathItem):
         colliding_items = self.scene().collidingItems(self)
 
         # Filter out child items and self
-        connected_blocks = self.get_all_connected_blocks()
-        colliding_items = [item for item in colliding_items if item != self and not self.is_descendant_of(item) and item not in connected_blocks]
+        colliding_items = [item for item in colliding_items if item != self and not self.is_descendant_of(item)]
 
         for item in colliding_items:
             if isinstance(item, ControlBlock):
@@ -197,25 +178,23 @@ class Block(QGraphicsPathItem):
                     self.highlighted_block = item
                     return
                 else:
-                    if  self.is_near(item, above=True):
+                    if self.dragging_from_top and self.is_near(item, above=True):
                         item.setPen(QPen(QColor('green'), 2))
                         self.highlighted_block = item
                         return
-                    elif  self.is_near(item, below=True):
+                    elif not self.dragging_from_top and self.is_near(item, below=True):
                         item.setPen(QPen(QColor('blue'), 2))
                         self.highlighted_block = item
                         return
             elif isinstance(item, Block):
-                if  self.is_near(item, above=True):
+                if self.dragging_from_top and self.is_near(item, above=True):
                     item.setPen(QPen(QColor('green'), 2))
                     self.highlighted_block = item
                     return
-                elif  self.is_near(item, below=True):
+                elif not self.dragging_from_top and self.is_near(item, below=True):
                     item.setPen(QPen(QColor('blue'), 2))
                     self.highlighted_block = item
                     return
-
-
 
     def is_descendant_of(self, item):
         # Check if self is a child or descendant of the given item
@@ -232,13 +211,15 @@ class Block(QGraphicsPathItem):
             # Check if the bottom of self is near the top of other_block
             self_bottom = self.sceneBoundingRect().bottom()
             other_top = other_block.sceneBoundingRect().top()
-            if abs(self_bottom - other_top) < threshold and abs(self.scenePos().x() - other_block.scenePos().x()) < threshold:
+            if abs(self_bottom - other_top) < threshold and abs(
+                    self.scenePos().x() - other_block.scenePos().x()) < threshold:
                 return True
         if below:
             # Check if the top of self is near the bottom of other_block
             self_top = self.sceneBoundingRect().top()
             other_bottom = other_block.sceneBoundingRect().bottom()
-            if abs(self_top - other_bottom) < threshold and abs(self.scenePos().x() - other_block.scenePos().x()) < threshold:
+            if abs(self_top - other_bottom) < threshold and abs(
+                    self.scenePos().x() - other_block.scenePos().x()) < threshold:
                 return True
         return False
 
@@ -252,14 +233,15 @@ class Block(QGraphicsPathItem):
             # if not (isinstance(self.highlighted_block, ControlBlock) and self.highlighted_block.is_open_area(self.scenePos())):
             #     self.disconnect_blocks()
 
-            if isinstance(self.highlighted_block, ControlBlock) and self.highlighted_block.is_open_area(self.scenePos()):
+            if isinstance(self.highlighted_block, ControlBlock) and self.highlighted_block.is_open_area(
+                    self.scenePos()):
                 # Snap into the control block
                 if len(self.highlighted_block.child_blocks):
                     self.highlighted_block.child_blocks[-1].next_block = self
                     self.prev_block = self.highlighted_block.child_blocks[-1]
                 self.highlighted_block.add_child_blocks(self)
             else:
-                if self.is_near(self.highlighted_block, above=True):
+                if self.dragging_from_top and self.is_near(self.highlighted_block, above=True):
                     if self.highlighted_block.prev_block is not None and self.highlighted_block.prev_block != self:
                         self.prev_block = self.highlighted_block.prev_block
                         self.highlighted_block.prev_block.next_block = self
@@ -277,7 +259,8 @@ class Block(QGraphicsPathItem):
                         if prev_block.parent_block is not None:
                             prev_block.parent_block.add_child_blocks(self)
                         prev_block = prev_block.prev_block
-                elif self.is_near(self.highlighted_block, below=True):
+                elif not self.dragging_from_top and self.is_near(self.highlighted_block, below=True):
+                    print(self.highlighted_block)
                     if self.highlighted_block.next_block is not None and self.highlighted_block.next_block != self:
                         self.next_block = self.highlighted_block.next_block
                         self.highlighted_block.next_block.prev_block = self
@@ -293,6 +276,7 @@ class Block(QGraphicsPathItem):
                     prev_block = self.prev_block
                     while prev_block is not None:
                         if prev_block.parent_block is not None:
+                            print("ГОЙДА!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
                             prev_block.parent_block.add_child_blocks(self)
                         prev_block = prev_block.parent_block
 
@@ -302,24 +286,23 @@ class Block(QGraphicsPathItem):
             pass  # Do not disconnect here to maintain existing connections
 
     def move_up(self, delta_y=20, move_parent_block=False):
-            """
+        """
             Moves the block upward by delta_y pixels.
             Also moves all connected previous blocks accordingly.
             """
-            if self.parent_block and move_parent_block:
-                # If the block is nested inside a control block, move the entire control block
-                self.parent_block.move_up(delta_y)
-                return
+        if self.parent_block and move_parent_block:
+            # If the block is nested inside a control block, move the entire control block
+            self.parent_block.move_up(delta_y)
+            return
 
-            # Move this block
-            current_pos = self.scenePos()
-            new_pos = QPointF(current_pos.x(), current_pos.y() - delta_y)
-            self.setPos(new_pos)
+        # Move this block
+        current_pos = self.scenePos()
+        new_pos = QPointF(current_pos.x(), current_pos.y() - delta_y)
+        self.setPos(new_pos)
 
-            # Move connected next blocks
-            if self.prev_block is not None:
-                self.prev_block.move_up(delta_y)
-
+        # Move connected next blocks
+        if self.prev_block is not None:
+            self.prev_block.move_up(delta_y)
 
     def move_down(self, delta_y=20, move_parent_block=False):
         """
@@ -370,6 +353,7 @@ class Block(QGraphicsPathItem):
             'АЗапись': 'analogWrite({}, {});',
             'Читать\nсерийный порт': 'Serial.read();',
             'Запись\nв серийный порт': 'Serial.write("{}");'}
+        print(self.text)
         command = command_mapping.get(self.text, '')
         code_lines = [command]
         if self.next_block:
@@ -379,6 +363,7 @@ class Block(QGraphicsPathItem):
     def suicide(self):
         self.disconnect_blocks()
         self.scene().removeItem(self)
+
 
 class ControlBlock(Block):
     def __init__(self, text, color, parent=None):
@@ -520,6 +505,7 @@ class ControlBlock(Block):
     def snap_to_block(self):
         super().snap_to_block()
 
+
 class StartBlock(Block):
     start_block = None
 
@@ -541,6 +527,7 @@ class StartBlock(Block):
         delta = 5
 
         # Add text
+        print("Pin")
         self.text_item = QGraphicsTextItem("Начало", self)
         font = QFont('Arial', 20)
         self.text_item.setFont(font)
@@ -572,6 +559,7 @@ class VariableBlock(Block):
         self.text_field_proxy.setPos(delta * 3, (height - text_rect.height()) / 2)
 
         # Add text
+        print("Var")
         self.text_item = QGraphicsTextItem("=", self)
         font = QFont('Arial', 16)
         self.text_item.setFont(font)
@@ -586,82 +574,12 @@ class VariableBlock(Block):
         self.text_field_proxy.setWidget(self.text_field2)
         self.text_field_proxy.setParentItem(self)
         text_rect_2 = self.text_field_proxy.boundingRect()
-        self.text_field_proxy.setPos(delta * 2 + text_rect.width() + int(delta * 2 * 1.5) + text_rect_1.width(), (self.height - text_rect_2.height()) / 2)
+        self.text_field_proxy.setPos(delta * 2 + text_rect.width() + int(delta * 2 * 1.5) + text_rect_1.width(),
+                                     (self.height - text_rect_2.height()) / 2)
 
     def generate_code(self):
         program = 'auto {} = {};\n'
         program = program.format(self.text_field1.text(), self.text_field2.text())
-        if self.next_block:
-            return program + self.next_block.generate_code()
-        return program
-
-class ArithmeticBlock(Block):
-    def __init__(self, text, color, parent=None):
-        super().__init__(text, color, parent)
-        self.child_blocks = []
-        self.setZValue(1)  # Control blocks are below child blocks
-        self.initUI()
-
-    def initUI(self):
-        super().initUI()
-        width = self.width
-        height = self.height
-        delta = 5
-
-        #
-        self.text_field1 = QLineEdit()
-        self.text_field1.setFont(QFont('Arial', 10))
-        self.text_field1.setFixedWidth(25)
-        self.text_field_proxy = QGraphicsProxyWidget(self)
-        self.text_field_proxy.setWidget(self.text_field1)
-        self.text_field_proxy.setParentItem(self)
-        text_rect = self.text_field_proxy.boundingRect()
-        self.text_field_proxy.setPos(delta * 1, (height - text_rect.height()) / 2)
-
-        # Add text
-        self.text_item = QGraphicsTextItem("=", self)
-        font = QFont('Arial', 13)
-        self.text_item.setFont(font)
-        text_rect_1 = self.text_item.boundingRect()
-        self.text_item.setPos(delta * 1 + text_rect.width(), (height - text_rect_1.height()) / 2)
-
-        #
-        self.text_field2 = QLineEdit()
-        self.text_field2.setFont(QFont('Arial', 10))
-        self.text_field2.setFixedWidth(25)
-        self.text_field_proxy = QGraphicsProxyWidget(self)
-        self.text_field_proxy.setWidget(self.text_field2)
-        self.text_field_proxy.setParentItem(self)
-        text_rect_2 = self.text_field_proxy.boundingRect()
-        self.text_field_proxy.setPos(int(delta * 1.5) + text_rect.width() + delta * 0 + text_rect_1.width(), (self.height - text_rect_2.height()) / 2)
-
-        #Add combo box
-        self.combo_box = QComboBox()
-        self.combo_box.addItems(['*', '-', '+', '/', '//', '%'])
-        self.combo_box.setFont(QFont('Arial', 8))
-
-        self.combo_box_proxy = QGraphicsProxyWidget(self)
-        self.combo_box_proxy.setWidget(self.combo_box)
-        text_rect3 = self.combo_box_proxy.boundingRect()
-        self.combo_box_proxy.setParentItem(self)
-        self.combo_box_proxy.setPos(
-            int(delta * 1.0) + text_rect.width() + delta * 0 + text_rect_1.width() + text_rect3.width(), (text_rect3.height()) / 2)
-        self.combo_box_proxy.setZValue(2)
-
-        #
-        self.text_field3 = QLineEdit()
-        self.text_field3.setFont(QFont('Arial', 10))
-        self.text_field3.setFixedWidth(25)
-        self.text_field_proxy = QGraphicsProxyWidget(self)
-        self.text_field_proxy.setWidget(self.text_field3)
-        self.text_field_proxy.setParentItem(self)
-        text_rect_2 = self.text_field_proxy.boundingRect()
-        self.text_field_proxy.setPos(
-            int(delta * 2) + text_rect.width() + delta * 2 + text_rect_1.width() + text_rect3.width() + text_rect_2.width(), (self.height - text_rect_2.height()) / 2)
-
-    def generate_code(self, i=1):
-        program = '{} = {} {} {};'
-        program = program.format(self.text_field1.text(), self.text_field2.text(), self.combo_box.currentText(), self.text_field3.text())
         if self.next_block:
             return program + self.next_block.generate_code()
         return program
@@ -704,6 +622,7 @@ class DelayBlock(Block):
         if self.next_block:
             return program + self.next_block.generate_code()
         return program
+
 
 class ControlBlock(Block):
     def __init__(self, text, color, parent=None):
@@ -858,6 +777,7 @@ class ControlBlock(Block):
     def snap_to_block(self):
         super().snap_to_block()
 
+
 class ConditionBlock(ControlBlock):
     def __init__(self, text, color, parent=None):
         super().__init__(text, color, parent)
@@ -881,7 +801,7 @@ class ConditionBlock(ControlBlock):
         self.text_field_proxy.setPos(
             (self.width - text_rect.width()) / 10, (text_rect.height()) / 2)
 
-       #Add combo box
+        # Add combo box
         self.combo_box = QComboBox()
         self.combo_box.addItems(['==', '!=', '>', '<'])
         self.combo_box.setFont(QFont('Arial', 10))
@@ -912,9 +832,11 @@ class ConditionBlock(ControlBlock):
         for child in self.child_blocks:
             program += child.generate_code()
         program += '}\n'
+        print("If", self.next_block)
         if self.next_block:
             return program + self.next_block.generate_code()
         return program
+
 
 class ForCycleBlock(ControlBlock):
     def __init__(self, text, color, parent=None):
@@ -951,7 +873,8 @@ class ForCycleBlock(ControlBlock):
         font = QFont('Arial', 14)
         self.text_item.setFont(font)
         text_rect = self.text_item.boundingRect()
-        self.text_item.setPos((delta * 4 + self.width - text_rect.width()) // 2 + text_rect2.width(), (text_rect.height()) // 2 - delta * 2)
+        self.text_item.setPos((delta * 4 + self.width - text_rect.width()) // 2 + text_rect2.width(),
+                              (text_rect.height()) // 2 - delta * 2)
 
     def generate_code(self):
         program = 'for (int i = 0; i < {}; ++i)'
@@ -960,65 +883,6 @@ class ForCycleBlock(ControlBlock):
         for child in self.child_blocks:
             program += child.generate_code()
         program += '}\n'
-        if self.next_block:
-            return program + self.next_block.generate_code()
-        return program
-
-class WhileCycleBlock(ControlBlock):
-    def __init__(self, text, color, parent=None):
-        super().__init__(text, color, parent)
-        self.initConditionUI()
-
-    def initConditionUI(self):
-        self.initUI()
-        self.notch_size = 5
-        self.tab_width = 20
-        self.tab_height = 10
-
-        # Add changeable text field (QLineEdit)
-        self.text_field = QLineEdit()
-        self.text_field.setFont(QFont('Arial', 10))
-        self.text_field.setFixedWidth(50)
-
-        self.text_field_proxy = QGraphicsProxyWidget(self)
-        self.text_field_proxy.setWidget(self.text_field)
-        text_rect = self.text_field_proxy.boundingRect()
-        self.text_field_proxy.setParentItem(self)
-        self.text_field_proxy.setPos(
-            (self.width - text_rect.width()) / 10, (text_rect.height()) / 2)
-
-       #Add combo box
-        self.combo_box = QComboBox()
-        self.combo_box.addItems(['==', '!=', '>', '<'])
-        self.combo_box.setFont(QFont('Arial', 10))
-
-        self.combo_box_proxy = QGraphicsProxyWidget(self)
-        self.combo_box_proxy.setWidget(self.combo_box)
-        text_rect = self.combo_box_proxy.boundingRect()
-        self.combo_box_proxy.setParentItem(self)
-        self.combo_box_proxy.setPos(
-            (self.width - text_rect.width()) / 2, (text_rect.height()) / 2)
-        self.combo_box_proxy.setZValue(2)
-
-        # Add changeable text field (QLineEdit)
-        self.text_field2 = QLineEdit()
-        self.text_field2.setFont(QFont('Arial', 10))
-        self.text_field2.setFixedWidth(50)
-
-        self.text_field_proxy = QGraphicsProxyWidget(self)
-        self.text_field_proxy.setWidget(self.text_field2)
-        text_rect = self.text_field_proxy.boundingRect()
-        self.text_field_proxy.setParentItem(self)
-        self.text_field_proxy.setPos(
-            (self.width - text_rect.width()) / 10 * 9, (text_rect.height()) / 2)
-
-    def generate_code(self, i=1):
-        program = 'while ({} {} {})'
-        program = program.format(self.text_field.text(), self.combo_box.currentText(), self.text_field2.text())
-        program += '{'
-        for child in self.child_blocks:
-            program += child.generate_code()
-        program += '}'
         if self.next_block:
             return program + self.next_block.generate_code()
         return program
@@ -1038,6 +902,7 @@ class DigitalReadBlock(Block):
         height = self.height
         delta = 5
 
+        print("Pin")
         self.text_item = QGraphicsTextItem("ЦЧтение", self)
         font = QFont('Arial', 10)
         self.text_item.setFont(font)
@@ -1052,7 +917,8 @@ class DigitalReadBlock(Block):
         self.text_field_proxy.setWidget(self.text_field)
         self.text_field_proxy.setParentItem(self)
         text_rect_2 = self.text_field_proxy.boundingRect()
-        self.text_field_proxy.setPos(int(delta * 2 + text_rect.width() + delta), (self.height - text_rect_2.height()) / 2)
+        self.text_field_proxy.setPos(int(delta * 2 + text_rect.width() + delta),
+                                     (self.height - text_rect_2.height()) / 2)
 
     def generate_code(self):
         program = super().generate_code()
@@ -1075,6 +941,7 @@ class AnalogReadBlock(Block):
         delta = 5
 
         # Add text
+        print("Pin")
         self.text_item = QGraphicsTextItem("АЧтение", self)
         font = QFont('Arial', 10)
         self.text_item.setFont(font)
@@ -1089,7 +956,8 @@ class AnalogReadBlock(Block):
         self.text_field_proxy.setWidget(self.text_field)
         self.text_field_proxy.setParentItem(self)
         text_rect_2 = self.text_field_proxy.boundingRect()
-        self.text_field_proxy.setPos(int(delta * 2 + text_rect.width() + delta), (self.height - text_rect_2.height()) / 2)
+        self.text_field_proxy.setPos(int(delta * 2 + text_rect.width() + delta),
+                                     (self.height - text_rect_2.height()) / 2)
 
     def generate_code(self):
         program = super().generate_code()
@@ -1112,6 +980,7 @@ class DigitalWriteBlock(Block):
         delta = 5
 
         # Add text
+        print("Pin")
         self.text_item = QGraphicsTextItem("ЦЗапись", self)
         font = QFont('Arial', 10)
         self.text_item.setFont(font)
@@ -1136,7 +1005,8 @@ class DigitalWriteBlock(Block):
         self.combo_box_proxy.setWidget(self.combo_box)
         text_rect_3 = self.combo_box_proxy.boundingRect()
         self.combo_box_proxy.setParentItem(self)
-        self.combo_box_proxy.setPos(delta * 2 + text_rect.width() + delta + text_rect_2.width() + delta, (self.height - text_rect_2.height()) / 2)
+        self.combo_box_proxy.setPos(delta * 2 + text_rect.width() + delta + text_rect_2.width() + delta,
+                                    (self.height - text_rect_2.height()) / 2)
 
     def generate_code(self):
         program = super().generate_code()
@@ -1159,6 +1029,7 @@ class AnalogWriteBlock(Block):
         delta = 5
 
         # Add text
+        print("Pin")
         self.text_item = QGraphicsTextItem("АЗапись", self)
         font = QFont('Arial', 10)
         self.text_item.setFont(font)
@@ -1184,7 +1055,7 @@ class AnalogWriteBlock(Block):
         self.text_field_proxy.setParentItem(self)
         text_rect_3 = self.text_field_proxy.boundingRect()
         self.text_field_proxy.setPos(delta * 2 + text_rect.width() + delta + text_rect_2.width() + delta,
-                                    (self.height - text_rect_2.height()) / 2)
+                                     (self.height - text_rect_2.height()) / 2)
 
     def generate_code(self):
         program = super().generate_code()
@@ -1207,6 +1078,7 @@ class SerialReadBlock(Block):
         delta = 5
 
         # Add text
+        print("Pin")
         self.text_item = QGraphicsTextItem("Читать\nсерийный порт", self)
         font = QFont('Arial', 10)
         self.text_item.setFont(font)
@@ -1234,6 +1106,7 @@ class SerialWriteBlock(Block):
         delta = 5
 
         # Add text
+        print("Pin")
         self.text_item = QGraphicsTextItem("Запись в\nсерийный порт", self)
         font = QFont('Arial', 10)
         self.text_item.setFont(font)
@@ -1249,7 +1122,6 @@ class SerialWriteBlock(Block):
         self.text_field_proxy.setParentItem(self)
         text_rect_2 = self.text_field_proxy.boundingRect()
         self.text_field_proxy.setPos(int(delta * 2 + text_rect.width()), (self.height - text_rect_2.height()) / 2)
-
 
     def generate_code(self):
         program = super().generate_code()
@@ -1306,21 +1178,21 @@ class Workspace(QGraphicsView):
         else:
             super().mouseReleaseEvent(event)
 
+
 class BlockPalette(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         self.parent = parent
-        blocks = ['Начало', 'Переменные', 'Арифметика', 'Сон', 'Условие', 'Повтор', 'Цикл', 'ЦЧтение', 'АЧтение', 'ЦЗапись',
+        blocks = ['Начало', 'PIN', 'Переменные', 'Сон', 'Условие', 'Повтор', 'ЦЧтение', 'АЧтение', 'ЦЗапись',
                   'АЗапись', 'Читать\nсерийный порт', 'Запись\nв серийный порт']
         colors = [
             QColor('#ff3386'),
             QColor('#FF5733'),
-            QColor('#FF5733'),
-            QColor('#FF5733'),
             QColor('#33FF57'),
             QColor('#3357FF'),
             QColor('#F1C40F'),
+            QColor('#9B59B6'),
             QColor('#9B59B6'),
             QColor('#9B59B6'),
             QColor('#9B59B6'),
@@ -1340,12 +1212,8 @@ class BlockPalette(QWidget):
     def add_block_to_workspace(self, text, color):
         if text == 'Повтор':
             block = ForCycleBlock(text, color)
-        elif text == 'Цикл':
-            block = WhileCycleBlock(text, color)
         elif text == 'Начало':
             block = StartBlock(text, color)
-        elif text == 'Арифметика':
-            block = ArithmeticBlock(text, color)
         elif text == 'Сон':
             block = DelayBlock(text, color)
         elif text == 'Условие':
@@ -1366,6 +1234,48 @@ class BlockPalette(QWidget):
             block = SerialWriteBlock(text, color)
         self.parent.workspace.scene().addItem(block)
         block.setPos(100, 100)
+
+
+class PinConfigurationWidget(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.pin_comboboxes = {}
+        self.setupUI()
+
+    def setupUI(self):
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel('<h2>DPins</h2>'))
+
+        # Scroll area
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
+
+        pin_numbers = list(range(0, 18)) + [20] + list(range(28, 36))
+        for pin_number in pin_numbers:
+            h_layout = QHBoxLayout()
+            label = QLabel(f"Pin{pin_number}")
+            combobox = QComboBox()
+            combobox.addItems(["INPUT", "OUTPUT"])
+            self.pin_comboboxes[pin_number] = combobox
+            h_layout.addWidget(label)
+            h_layout.addWidget(combobox)
+            scroll_layout.addLayout(h_layout)
+
+        scroll_layout.addStretch()
+        scroll_content.setLayout(scroll_layout)
+        scroll_area.setWidget(scroll_content)
+
+        scroll_area.setFixedWidth(200)
+
+        layout.addWidget(scroll_area)
+        self.setLayout(layout)
+
+    def get_pin_configurations(self):
+        pin_numbers = sorted(self.pin_comboboxes.keys())
+        pin_configs = [self.pin_comboboxes[pin].currentText() for pin in pin_numbers]
+        return pin_configs
 
 
 class MainWindow(QWidget):
@@ -1397,62 +1307,43 @@ class MainWindow(QWidget):
         left_layout.addStretch()
         left_layout.addWidget(self.run_button)
 
-        main_layout.addLayout(left_layout)
-        main_layout.addWidget(self.workspace)
-
-        # Right Side Bar
-        right_widget = QWidget()
-        right_layout = QVBoxLayout(right_widget)
-        right_layout.addWidget(QLabel('<h2>DPins</h2>'))
-
-        pin_numbers = list(range(0, 18)) + [20] + list(range(28, 36))
-        self.pin_comboboxes = {}
-        for pin_number in pin_numbers:
-            h_layout = QHBoxLayout()
-            label = QLabel(f"Pin{pin_number}")
-            combobox = QComboBox()
-            combobox.addItems(["INPUT", "OUTPUT"])
-            self.pin_comboboxes[pin_number] = combobox
-            h_layout.addWidget(label)
-            h_layout.addWidget(combobox)
-            right_layout.addLayout(h_layout)
-
-        right_layout.addStretch()
-
-        right_scroll_area = QScrollArea()
-        right_scroll_area.setWidgetResizable(True)
-        right_scroll_area.setWidget(right_widget)
-        right_scroll_area.setMinimumWidth(150)
-
-        right_scroll_area.setFixedWidth(200)
-        right_scroll_area.setFixedHeight(400)
+        self.pin_config_widget = PinConfigurationWidget()
 
         # Arrange layouts
         main_layout.addLayout(left_layout)
         main_layout.addWidget(self.workspace)
-        main_layout.addWidget(right_scroll_area)
+        main_layout.addWidget(self.pin_config_widget)
 
         self.setLayout(main_layout)
 
-
     def run_program(self):
-        # Find all top-level blocks
-        block = [item for item in self.workspace.scene().items()
-                  if isinstance(item, StartBlock)]
-        # Sort blocks by their vertical position
-        if len(block) == 0:
-            QMessageBox.information(self, "Program", f"Для запуска программы необходим блок 'Начало'")
+        # Find the 'Начало' block
+        start_blocks = [item for item in self.workspace.scene().items()
+                        if isinstance(item, StartBlock)]
+        if not start_blocks:
+            QMessageBox.information(self, "Program", "Для запуска программы необходим блок 'Начало'")
             return
 
-        rudiron_code = block[0].generate_code()
+        # Generate code starting from the 'Начало' block
+        rudiron_code = start_blocks[0].generate_code()
+
+        # Get the pin configurations
+        pin_configs = self.pin_config_widget.get_pin_configurations()
+
         # Display or execute the code
-        QMessageBox.information(
-            self, "Program", f"Ваша программа успешно сгенерированна!")
-        # Here you can add code to send 'rudiron_code' to the Rudiron controller
+        QMessageBox.information(self, "Program", "Ваша программа успешно сгенерирована!")
+
+        print("Pin Configurations:")
+        pin_numbers = sorted(self.pin_config_widget.pin_comboboxes.keys())
+        for pin, config in zip(pin_numbers, pin_configs):
+            print(f"Pin{pin}: {config}")
+
+        # Here you can add code to send 'rudiron_code' and 'pin_configs' to the Rudiron controller
         rendered_rudiron_code = f"void setup() {{{rudiron_code}}}"
         print(rendered_rudiron_code)
         with open("temp.ino", "w") as file:
             file.write(rendered_rudiron_code)
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
