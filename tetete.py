@@ -594,6 +594,8 @@ class Block(QGraphicsPathItem):
             'АЧтение': 'analogRead({});',
             'ЦЗапись': 'digitalWrite({}, {});',
             'АЗапись': 'analogWrite({}, {});',
+            'Слушай': 'Serial.read();',
+            'Говори': 'Serial.println({});'}
             'Читать\nсерийный порт': 'Serial.read();',
             'Запись\nв серийный порт': 'Serial.println({});'}
         command = command_mapping.get(self.text, '')
@@ -1611,6 +1613,7 @@ class SerialReadBlock(Block):
         self.text_item.setFont(font)
         text_rect = self.text_item.boundingRect()
         self.text_item.setPos((width - text_rect.width()) / 10 * 8, (height - text_rect.height()) / 2)
+        self.text_item.setPos((width - text_rect.width()) / 10 * 8, (height - text_rect.height()) / 2)
 
     def generate_code(self, recursion_depth=0):
         if self.text_field.text() not in declared_variables:
@@ -1641,7 +1644,7 @@ class SerialWriteBlock(Block):
         delta = 5
 
         # Add text
-        self.text_item = QGraphicsTextItem("Запись в\nсерийный порт", self)
+        self.text_item = QGraphicsTextItem("Говори", self)
         font = QFont('Arial', 10)
         self.text_item.setFont(font)
         text_rect = self.text_item.boundingRect()
@@ -1658,6 +1661,10 @@ class SerialWriteBlock(Block):
         self.text_field_proxy.setPos(int(delta * 2 + text_rect.width()), (self.height - text_rect_2.height()) / 2)
 
     def generate_code(self, recursion_depth=0):
+        if not is_valid_integer_or_var(self.text_field.text()):
+            show_message_box("Записать в последовательный порт можно только число или значение переменной!")
+            return None
+        program = f"Serial.print({self.text_field.text()});"
         if not is_valid_integer_or_var(self.text_field.text()):
             show_message_box("Записать в последовательный порт можно только число или значение переменной!")
             return None
@@ -1727,7 +1734,7 @@ class BlockPalette(QWidget):
         self.parent = parent
         blocks = ['Начало', 'Переменные', 'Арифметика', 'Сон', 'Условие', 'Повтор', 'Цикл', 'ЦЧтение', 'АЧтение',
                   'ЦЗапись',
-                  'АЗапись', 'Читать\nсерийный порт', 'Запись\nв серийный порт']
+                  'АЗапись', 'Слушай', 'Говори']
         colors = [
             QColor('#ff3386'),
             QColor('#FF5733'),
@@ -1741,7 +1748,7 @@ class BlockPalette(QWidget):
             QColor('#8B00FF'),
             QColor('#BFFF00'),
             QColor('#40E0D0'),
-            QColor('#FFD700')
+            QColor('#FFD701')
         ]
 
         for text, color in zip(blocks, colors):
@@ -1775,9 +1782,9 @@ class BlockPalette(QWidget):
             block = DigitalWriteBlock(text, color)
         elif text == 'АЗапись':
             block = AnalogWriteBlock(text, color)
-        elif text == 'Читать\nсерийный порт':
+        elif text == 'Слушай':
             block = SerialReadBlock(text, color)
-        elif text == 'Запись\nв серийный порт':
+        elif text == 'Говори':
             block = SerialWriteBlock(text, color)
         self.parent.workspace.scene().addItem(block)
         block.setPos(100, 100)
@@ -1791,7 +1798,7 @@ class PinConfigurationWidget(QWidget):
 
     def setupUI(self):
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel('<h2>DPins</h2>'))
+        layout.addWidget(QLabel('<h2>ПИНы</h2>'))
 
         # Scroll area
         scroll_area = QScrollArea()
@@ -1803,7 +1810,7 @@ class PinConfigurationWidget(QWidget):
             h_layout = QHBoxLayout()
             label = QLabel(f"Pin{pin_number}")
             combobox = QComboBox()
-            combobox.addItems(["INPUT", "OUTPUT"])
+            combobox.addItems(["ВВОД", "ВЫВОД"])
             self.pin_comboboxes[pin_number] = combobox
             h_layout.addWidget(label)
             h_layout.addWidget(combobox)
@@ -2015,13 +2022,13 @@ class MainWindow(QWidget):
         self.workspace = Workspace(self)
 
         # Run Button
-        self.run_button = QPushButton('Run')
+        self.run_button = QPushButton('Запуск')
         self.run_button.setStyleSheet('font-size: 16px; height: 40px;')
         self.run_button.clicked.connect(self.run_program)
 
         # Размещение элементов слева
         left_layout = QVBoxLayout()
-        left_layout.addWidget(QLabel('<h2>Blocks</h2>'))
+        left_layout.addWidget(QLabel('<h2>Блоки</h2>'))
         left_layout.addWidget(self.palette)
         left_layout.addStretch()
         left_layout.addWidget(self.run_button)
