@@ -1429,8 +1429,11 @@ class SerialReadBlock(Block):
         self.text_item.setPos(delta * 2, (height - text_rect.height()) / 2)
 
     def generate_code(self, recursion_depth=0):
-        program = super().generate_code(recursion_depth)
-        program = program.format()
+        if self.text_field.text() not in declared_variables:
+            show_message_box("Необходимо указать корректную переменную для записи результата чтения серильного порта!")
+            return None
+        program = "{} = Serial.read();"
+        program = program.format(self.text_field.text())
         if self.next_block:
             result = self.next_block.generate_code(recursion_depth)
             if result is None:
@@ -1877,9 +1880,10 @@ class MainWindow(QWidget):
         rendered_rudiron_code += "Serial.begin(9600);"
         rendered_rudiron_code += "delay(10);"
         for i in PINS:
-            rendered_rudiron_code += f"pinMode(PIN{i}, {self.pin_config_widget.pin_comboboxes[i].currentText()});\n"
+            rendered_rudiron_code += f"pinMode({i}, {self.pin_config_widget.pin_comboboxes[i].currentText()});\n"
         rendered_rudiron_code += rudiron_code
         rendered_rudiron_code += "}"
+        rendered_rudiron_code += "void loop(){}"
         print(rendered_rudiron_code)
         with open("temp.ino", "w") as file:
             file.write(rendered_rudiron_code)
