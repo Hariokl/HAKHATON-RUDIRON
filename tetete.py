@@ -36,18 +36,33 @@ cpp_keywords = {
 
 
 def is_valid_analog_pin(pin):
-    return True
+    return 0 <= pin <= 35
 
 
 def is_valid_digital_pin(pin):
-    return True
+    return 21 <= pin <= 25
 
+
+def is_string(value):
+    if is_ascii_string(value) and len(value) >= 2 and value[0] == '"' and value[-1] == '"':
+        return True
+    return False
+
+def is_ascii_string(s):
+    # Регулярное выражение для проверки стандартных ASCII символов
+    pattern = r'^[\x20-\x7E]*$'
+    return bool(re.match(pattern, s))
 
 def is_valid_integer(value):
     # Регулярное выражение для целых чисел
     pattern = r'^[+-]?\d+$'
     return bool(re.match(pattern, value))
 
+def is_integer(value):
+    pattern = r'^[+-]?\d+$'
+    if value in declared_variables:
+        return declared_variables[value] == "int"
+    return bool(re.match(pattern, value))
 
 def is_valid_cpp_variable_name(name):
     # Проверяем, что имя не является ключевым словом C++
@@ -66,7 +81,7 @@ test_names = ["variable", "2variable", "_variable", "int", "var_123"]
 for name in test_names:
     print(f"{name}: {'Valid' if is_valid_cpp_variable_name(name) else 'Invalid'}")
 
-declared_variables = set()  # should fix it, temp impl
+declared_variables = dict()  # should fix it, temp impl
 
 
 def is_valid_integer_or_var(text):
@@ -580,7 +595,7 @@ class Block(QGraphicsPathItem):
             'ЦЗапись': 'digitalWrite({}, {});',
             'АЗапись': 'analogWrite({}, {});',
             'Читать\nсерийный порт': 'Serial.read();',
-            'Запись\nв серийный порт': 'Serial.println("{}");'}
+            'Запись\nв серийный порт': 'Serial.println({});'}
         command = command_mapping.get(self.text, '')
         code_lines = [command]
         if self.next_block:
@@ -813,14 +828,14 @@ class VariableBlock(Block):
         if self.text_field1.text() == "" or not is_valid_cpp_variable_name(self.text_field1.text()):
             show_message_box(f"Название переменной '{self.text_field1.text()}' некорректно!")
             return None
-        if not is_valid_integer_or_var(self.text_field2.text()):
+        if not is_valid_integer_or_var(self.text_field2.text()) and not is_string(self.text_field2.text()):
             show_message_box(
-                f"Значение переменной '{self.text_field1.text()}' должно быть целым числом или переменной!")
+                f"Значение переменной '{self.text_field1.text()}' должно быть целым числом, переменнойили строкой из латинских символов!")
             return None
         if self.text_field1.text() in declared_variables:
             show_message_box(f"Переменная '{self.text_field1.text()}' объявлена несколько раз!")
             return None
-        declared_variables.add(self.text_field1.text())
+        declared_variables[self.text_field1.text()] = "int" if is_valid_integer(self.text_field2.text()) else "string"
         program = 'auto {} = {};\n'
         program = program.format(self.text_field1.text(), self.text_field2.text())
         if self.next_block:
@@ -903,10 +918,10 @@ class ArithmeticBlock(Block):
         if self.text_field1.text() not in declared_variables:
             show_message_box(f"Переменная {self.text_field1.text()} не объявлена!")
             return None
-        if not is_valid_integer_or_var(self.text_field2.text()):
+        if not is_valid_integer_or_var(self.text_field2.text()) or declared_variables[self.text_field2.text()] == "string":
             show_message_box(f"Значение левого операнда должно быть целым числом или переменной!")
             return None
-        if not is_valid_integer_or_var(self.text_field3.text()):
+        if not is_valid_integer_or_var(self.text_field3.text()) or declared_variables[self.text_field2.text()] == "string":
             show_message_box(f"Значение правого операнда должно быть целым числом или переменной!")
             return None
         program = program.format(self.text_field1.text(), self.text_field2.text(), self.combo_box.currentText(),
@@ -1168,11 +1183,14 @@ class ConditionBlock(ControlBlock):
             (self.width - text_rect.width()) / 10 * 9, (text_rect.height()) / 2)
 
     def generate_code(self, recursion_depth=0):
-        if not is_valid_integer_or_var(self.text_field.text()):
-            show_message_box("Условия применимы только для переменных и целых чисел!")
+        if not is_valid_integer_or_var(self.text_field.text()) and not self.text_field.text() in declared_variables and not is_ascii_string(self.text_field.text()):
+            show_message_box("Условия применимы только для переменных, целых чисел и строк!")
             return None
-        if not is_valid_integer_or_var(self.text_field2.text()):
-            show_message_box("Условия применимы только для переменных и целых чисел!")
+        if not is_valid_integer_or_var(self.text_field2.text()) and not self.text_field2.text() in declared_variables and not is_ascii_string(self.text_field2.text()):
+            show_message_box("Условия применимы только для переменных, целых чисел и строк!")
+            return None
+        if is_integer(self.text_field.text()) != is_integer(self.text_field2.text()):
+            show_message_box("Оба операнда условия должны быть одного типа!")
             return None
         program = 'if ({} {} {})'
         program = program.format(self.text_field.text(), self.combo_box.currentText(), self.text_field2.text())
@@ -1233,7 +1251,7 @@ class ForCycleBlock(ControlBlock):
 
     def generate_code(self, recursion_depth=0):
 
-        if not is_valid_integer_or_var(self.text_field2.text()):
+        if not is_integer(self.text_field2.text()):
             show_message_box("Количеством повторов должно быть ыцелое число или переменная!")
             return None
         program = 'for (int i{} = 0; i{} < {}; ++i{})'
@@ -1305,11 +1323,14 @@ class WhileCycleBlock(ControlBlock):
 
     def generate_code(self, recursion_depth=0):
 
-        if not is_valid_integer_or_var(self.text_field.text()):
-            show_message_box("Циклы с условием применимы только для переменных и целых чисел!")
+        if not is_valid_integer_or_var(self.text_field.text()) and not self.text_field.text() in declared_variables and not is_ascii_string(self.text_field.text()):
+            show_message_box("Циклы с условием применимы только для переменных, целых чисел и строк!")
             return None
-        if not is_valid_integer_or_var(self.text_field2.text()):
-            show_message_box("Циклы с условием применимы только для переменных и целых чисел!")
+        if not is_valid_integer_or_var(self.text_field2.text()) and not self.text_field2.text() in declared_variables and not is_ascii_string(self.text_field2.text()):
+            show_message_box("Циклы с условием применимы только для переменных, целых чисел и строк!")
+            return None
+        if is_integer(self.text_field.text()) != is_integer(self.text_field2.text()):
+            show_message_box("Оба операнда цикла с условием должны быть одного типа!")
             return None
         program = 'while ({} {} {})'
         program = program.format(self.text_field.text(), self.combo_box.currentText(), self.text_field2.text())
@@ -1568,12 +1589,28 @@ class SerialReadBlock(Block):
         height = self.height
         delta = 5
 
+        #
+        self.text_field = QLineEdit()
+        self.text_field.setFont(QFont('Arial', 10))
+        self.text_field.setFixedWidth(30)
+        self.text_field_proxy = QGraphicsProxyWidget(self)
+        self.text_field_proxy.setWidget(self.text_field)
+        self.text_field_proxy.setParentItem(self)
+        text_rect = self.text_field_proxy.boundingRect()
+        self.text_field_proxy.setPos((width - text_rect.width()) / 15, (height - text_rect.height()) / 2)
+
+        # Add text
+        self.text_item = QGraphicsTextItem("=", self)
+        font = QFont('Arial', 10)
+        self.text_item.setFont(font)
+        text_rect_1 = self.text_item.boundingRect()
+        self.text_item.setPos((width - text_rect_1.width()) / 15 * 4, (height - text_rect_1.height()) / 2)
         # Add text
         self.text_item = QGraphicsTextItem("Читать\nсерийный порт", self)
         font = QFont('Arial', 10)
         self.text_item.setFont(font)
         text_rect = self.text_item.boundingRect()
-        self.text_item.setPos(delta * 2, (height - text_rect.height()) / 2)
+        self.text_item.setPos((width - text_rect.width()) / 10 * 8, (height - text_rect.height()) / 2)
 
     def generate_code(self, recursion_depth=0):
         if self.text_field.text() not in declared_variables:
@@ -1621,8 +1658,10 @@ class SerialWriteBlock(Block):
         self.text_field_proxy.setPos(int(delta * 2 + text_rect.width()), (self.height - text_rect_2.height()) / 2)
 
     def generate_code(self, recursion_depth=0):
-        program = super().generate_code(recursion_depth)
-        program = program.format(self.text_field.text())
+        if not is_valid_integer_or_var(self.text_field.text()):
+            show_message_box("Записать в последовательный порт можно только число или значение переменной!")
+            return None
+        program = f"Serial.print({self.text_field.text()});"
         if self.next_block:
             result = self.next_block.generate_code(recursion_depth)
             if result is None:
@@ -2005,45 +2044,50 @@ class MainWindow(QWidget):
         self.setLayout(main_layout)
 
     def run_program(self):
-        global declared_variables
-        declared_variables = set()
-        # Find all top-level blocks
-        block = [item for item in self.workspace.scene().items()
-                 if isinstance(item, StartBlock)]
-        # Sort blocks by their vertical position
-        if len(block) == 0:
-            QMessageBox.information(self, "Program", f"Для запуска программы необходим блок 'Начало'")
-            return
-        self.serial_reader.disconnect_serial()
-        reset_arduino(self.serial_reader.port_combo.currentText())
-        rudiron_code = block[0].generate_code()
-        # Display or execute the code
-        if rudiron_code is None:
-            return
+        try:
+            global declared_variables
+            declared_variables = dict()
+            # Find all top-level blocks
+            block = [item for item in self.workspace.scene().items()
+                     if isinstance(item, StartBlock)]
+            # Sort blocks by their vertical position
+            if len(block) == 0:
+                QMessageBox.information(self, "Program", f"Для запуска программы необходим блок 'Начало'")
+                return
+            
+            rudiron_code = block[0].generate_code()
+            # Display or execute the code
+            if rudiron_code is None:
+                return
 
-        # Get the pin configurations
-        pin_configs = self.pin_config_widget.get_pin_configurations()
-        pin_numbers = sorted(self.pin_config_widget.pin_comboboxes.keys())
-        pin_init = ""
-        for pin, config in zip(pin_numbers, pin_configs):
-            pin_init += f"pinMode({pin}, {config});\n"
-        QMessageBox.information(
-            self, "Program", f"Ваша программа успешно сгенерированна!")
-        rendered_rudiron_code = "void setup(){"
-        rendered_rudiron_code += "Serial.begin(9600);"
-        rendered_rudiron_code += "delay(10);"
-        for i in PINS:
-            rendered_rudiron_code += f"pinMode({i}, {self.pin_config_widget.pin_comboboxes[i].currentText()});\n"
-        rendered_rudiron_code += rudiron_code
-        rendered_rudiron_code += "}"
-        rendered_rudiron_code += "void loop(){}"
-        print(rendered_rudiron_code)
-        if not os.path.isdir("temp"):
-            os.mkdir("temp")
-        with open(os.path.abspath(os.curdir) + "\\temp\\temp.ino", "w") as file:
-            file.write(rendered_rudiron_code)
-        upload_to_board(self.serial_reader.port_combo.currentText())
-        self.serial_reader.connect_serial()
+            # Get the pin configurations
+            pin_configs = self.pin_config_widget.get_pin_configurations()
+            pin_numbers = sorted(self.pin_config_widget.pin_comboboxes.keys())
+            pin_init = ""
+            for pin, config in zip(pin_numbers, pin_configs):
+                pin_init += f"pinMode({pin}, {config});\n"
+            QMessageBox.information(
+                self, "Program", f"Ваша программа успешно сгенерированна!")
+            rendered_rudiron_code = "void setup(){"
+            rendered_rudiron_code += "Serial.begin(9600);"
+            rendered_rudiron_code += "delay(10);"
+            for i in PINS:
+                rendered_rudiron_code += f"pinMode({i}, {self.pin_config_widget.pin_comboboxes[i].currentText()});\n"
+            rendered_rudiron_code += rudiron_code
+            rendered_rudiron_code += "}"
+            rendered_rudiron_code += "void loop(){}"
+            print(rendered_rudiron_code)
+            if not os.path.isdir("temp"):
+                os.mkdir("temp")
+            with open(os.path.abspath(os.curdir) + "\\temp\\temp.ino", "w") as file:
+                file.write(rendered_rudiron_code)
+            raise Exception
+            self.serial_reader.disconnect_serial()
+            reset_arduino(self.serial_reader.port_combo.currentText())
+            upload_to_board(self.serial_reader.port_combo.currentText())
+            self.serial_reader.connect_serial()
+        except Exception as e:
+            print(e)
 
 
 if __name__ == '__main__':
