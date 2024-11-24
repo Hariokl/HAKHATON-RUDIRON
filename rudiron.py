@@ -62,8 +62,10 @@ def reset_arduino(port, baudrate=9600, reset_time=2):
     except serial.SerialException as e:
         print(f"Ошибка работы с последовательным портом: {e}")
 
-# reset_arduino("COM3")
-# upload_to_board("COM3")
+
+if __name__ == "__main__":
+    reset_arduino("COM3")
+    upload_to_board("COM3")
 
 
 
