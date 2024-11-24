@@ -28,6 +28,11 @@ cpp_keywords = {
     "wchar_t", "while", "xor", "xor_eq"
 }
 
+def is_valid_analog_pin(pin):
+    return False
+
+def is_valid_digital_pin(pin):
+    return False
 
 def is_valid_integer(value):
     # Регулярное выражение для целых чисел
