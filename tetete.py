@@ -2,7 +2,7 @@ import sys
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QGraphicsView, QGraphicsScene, QGraphicsItem,
     QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMessageBox, QGraphicsTextItem,
-    QGraphicsPathItem, QLineEdit, QGraphicsProxyWidget, QComboBox, QScrollArea, QDialog
+    QGraphicsPathItem, QLineEdit, QGraphicsProxyWidget, QComboBox, QScrollArea, QDialog, QScrollArea, QDialog
 )
 from PyQt6.QtGui import QBrush, QColor, QPen, QPainterPath, QFont, QPainter, QIcon
 from PyQt6.QtCore import Qt, QRectF, QPointF
@@ -144,14 +144,6 @@ class Block(QGraphicsPathItem):
         self.setBrush(QBrush(self.color))
         self.setPen(QPen(Qt.GlobalColor.black))
 
-        # Add text
-        # self.text_item = QGraphicsTextItem(self.text, self)
-        # font = QFont('Arial', 12)
-        # self.text_item.setFont(font)
-        # text_rect = self.text_item.boundingRect()
-        # self.text_item.setPos(
-        #     (width - text_rect.width()) / 2, (height - text_rect.height()) / 2)
-
     def mousePressEvent(self, event):
         # Set focus to the workspace
         if self.scene().views():
@@ -168,20 +160,6 @@ class Block(QGraphicsPathItem):
         for block in blocks_to_move:
             # Store the scene positions
             self.initial_positions[block] = block.mapToScene(QPointF(0, 0))
-
-        # # Disconnect from previous and next blocks depending on where the block is grabbed
-        # if self.dragging_from_top:
-        #     if self.prev_block:
-        #         self.prev_block.next_block = None
-        #         self.prev_block = None
-        # else:
-        #     if self.next_block:
-        #         self.next_block.prev_block = None
-        #         self.next_block = None
-
-        # # If the block is inside a control block, we need to detach it temporarily
-        # if self.parent_block:
-        #     self.parent_block.remove_child_block(self)
 
         super().mousePressEvent(event)
 
@@ -267,44 +245,6 @@ class Block(QGraphicsPathItem):
                     stack.append(block.next_block)
         return blocks
 
-    # def check_for_snap(self):
-    #     # Reset any previous highlighted block
-    #     if self.highlighted_block:
-    #         self.highlighted_block.setPen(QPen(Qt.GlobalColor.black))
-    #         self.highlighted_block = None
-
-    #     # Highlight potential snap targets
-    #     colliding_items = self.scene().collidingItems(self)
-
-    #     # Filter out child items and self
-    #     connected_blocks = self.get_all_connected_blocks()
-    #     colliding_items = [item for item in colliding_items if item != self and not self.is_descendant_of(item) and item not in connected_blocks]
-
-    #     for item in colliding_items:
-    #         if isinstance(item, ControlBlock):
-    #             if item.is_open_area(self.scenePos()):
-    #                 item.setPen(QPen(QColor('purple'), 2))
-    #                 self.highlighted_block = item
-    #                 return
-    #             else:
-    #                 if self.dragging_from_top and self.is_near(item, above=True):
-    #                     item.setPen(QPen(QColor('green'), 2))
-    #                     self.highlighted_block = item
-    #                     return
-    #                 elif not self.dragging_from_top and self.is_near(item, below=True):
-    #                     item.setPen(QPen(QColor('blue'), 2))
-    #                     self.highlighted_block = item
-    #                     return
-    #         elif isinstance(item, Block):
-    #             if self.dragging_from_top and self.is_near(item, above=True):
-    #                 item.setPen(QPen(QColor('green'), 2))
-    #                 self.highlighted_block = item
-    #                 return
-    #             elif not self.dragging_from_top and self.is_near(item, below=True):
-    #                 item.setPen(QPen(QColor('blue'), 2))
-    #                 self.highlighted_block = item
-    #                 return
-
 
     def check_for_snap(self):
         # Reset any previous highlighted block
@@ -371,67 +311,6 @@ class Block(QGraphicsPathItem):
                 return True
         return False
 
-
-
-    # def snap_to_block(self):
-    #     if self.highlighted_block:
-    #         # Reset pen of the highlighted block
-    #         self.highlighted_block.setPen(QPen(Qt.GlobalColor.black))
-
-    #         # Disconnect any existing connections
-    #         # Only disconnect if not snapping into a control block
-    #         # if not (isinstance(self.highlighted_block, ControlBlock) and self.highlighted_block.is_open_area(self.scenePos())):
-    #         #     self.disconnect_blocks()
-
-    #         if isinstance(self.highlighted_block, ControlBlock) and self.highlighted_block.is_open_area(self.scenePos()):
-    #             # Snap into the control block
-    #             if len(self.highlighted_block.child_blocks):
-    #                 self.highlighted_block.child_blocks[-1].next_block = self
-    #                 self.prev_block = self.highlighted_block.child_blocks[-1]
-    #             self.highlighted_block.add_child_blocks(self)
-    #         else:
-    #             if self.dragging_from_top and self.is_near(self.highlighted_block, above=True):
-    #                 if self.highlighted_block.prev_block is not None and self.highlighted_block.prev_block != self:
-    #                     self.prev_block = self.highlighted_block.prev_block
-    #                     self.highlighted_block.prev_block.next_block = self
-    #                     self.prev_block.move_up(self.boundingRect().height())
-    #                 # Snap the bottom of self to the top of the highlighted block
-    #                 self.next_block = self.highlighted_block
-    #                 self.highlighted_block.prev_block = self
-
-    #                 # Align positions
-    #                 new_x = self.highlighted_block.scenePos().x()
-    #                 new_y = self.highlighted_block.scenePos().y() - self.boundingRect().height() + 2
-    #                 self.setPos(new_x, new_y)
-    #                 prev_block = self.prev_block
-    #                 while prev_block is not None:
-    #                     if prev_block.parent_block is not None:
-    #                         prev_block.parent_block.add_child_blocks(self)
-    #                     prev_block = prev_block.prev_block
-    #             elif not self.dragging_from_top and self.is_near(self.highlighted_block, below=True):
-    #                 print(self.highlighted_block)
-    #                 if self.highlighted_block.next_block is not None and self.highlighted_block.next_block != self:
-    #                     self.next_block = self.highlighted_block.next_block
-    #                     self.highlighted_block.next_block.prev_block = self
-    #                     self.next_block.move_down(self.boundingRect().height(), False)
-    #                 # Snap the top of self to the bottom of the highlighted block
-    #                 self.prev_block = self.highlighted_block
-    #                 self.highlighted_block.next_block = self
-
-    #                 # Align positions
-    #                 new_x = self.highlighted_block.scenePos().x()
-    #                 new_y = self.highlighted_block.scenePos().y() + self.highlighted_block.boundingRect().height() - 2
-    #                 self.setPos(new_x, new_y)
-    #                 prev_block = self.prev_block
-    #                 while prev_block is not None:
-    #                     if prev_block.parent_block is not None:
-    #                         prev_block.parent_block.add_child_blocks(self)
-    #                     prev_block = prev_block.parent_block
-
-    #         self.highlighted_block = None
-    #     else:
-    #         # If not snapped to anything, ensure the block is standalone
-    #         pass  # Do not disconnect here to maintain existing connections
     def reposition_next_blocks(self):
         y_offset = self.height + self.y()
         current = self.next_block
@@ -457,12 +336,6 @@ class Block(QGraphicsPathItem):
         if self.highlighted_block:
             # Reset pen of the highlighted block
             self.highlighted_block.setPen(QPen(Qt.GlobalColor.black))
-
-            # Disconnect any existing connections
-            # Only disconnect if not snapping into a control block
-            # if not (isinstance(self.highlighted_block, ControlBlock) and self.highlighted_block.is_open_area(self.scenePos())):
-            #     self.disconnect_blocks()
-
             if isinstance(self.highlighted_block, ControlBlock) and self.highlighted_block.is_open_area(self.scenePos()):
                 # Snap into the control block
                 if len(self.highlighted_block.child_blocks):
@@ -763,6 +636,9 @@ class StartBlock(Block):
         text_rect = self.text_item.boundingRect()
         self.text_item.setPos((self.width - text_rect.width()) // 2, (height - text_rect.height()) / 2)
 
+    def suicide(self):
+        StartBlock.start_block = None
+        super().suicide()
 
 class VariableBlock(Block):
     def __init__(self, text, color, parent=None):
@@ -898,7 +774,7 @@ class ArithmeticBlock(Block):
             return None
         if not is_valid_integer_or_var( self.text_field3.text()):
             show_message_box(f"Значение правого операнда должно быть целым числом или переменной!")
-            return None 
+            return None
         program = program.format(self.text_field1.text(), self.text_field2.text(), self.combo_box.currentText(), self.text_field3.text())
         if self.next_block:
             result = self.next_block.generate_code(recursion_depth)
@@ -906,7 +782,6 @@ class ArithmeticBlock(Block):
                 return None
             return program + result
         return program
-
 
 class DelayBlock(Block):
     def __init__(self, text, color, parent=None):
@@ -949,7 +824,7 @@ class DelayBlock(Block):
             result = self.next_block.generate_code(recursion_depth)
             if result is None:
                 return None
-            return program + result        
+            return program + result
         return program
 
 class ControlBlock(Block):
@@ -1132,7 +1007,7 @@ class ConditionBlock(ControlBlock):
 
        #Add combo box
         self.combo_box = QComboBox()
-        self.combo_box.addItems(['==', '!=', '>', '<'])
+        self.combo_box.addItems(['==', '!=', '>', '>=', '<', '<='])
         self.combo_box.setFont(QFont('Arial', 10))
 
         self.combo_box_proxy = QGraphicsProxyWidget(self)
@@ -1167,13 +1042,16 @@ class ConditionBlock(ControlBlock):
         # for child in self.child_blocks:
         #     program += child.generate_code(recursion_depth + 1)
         if self.child_blocks:
-            program += self.child_blocks[0].generate_code(recursion_depth + 1)
+            code = self.child_blocks[0].generate_code(recursion_depth + 1)
+            if code is None:
+                return None
+            program += code
         program += '}\n'
         if self.next_block:
             result = self.next_block.generate_code(recursion_depth)
             if result is None:
                 return None
-            return program + result 
+            return program + result
         return program
 
 class ForCycleBlock(ControlBlock):
@@ -1217,20 +1095,23 @@ class ForCycleBlock(ControlBlock):
 
         if not is_valid_integer_or_var(self.text_field2.text()):
             show_message_box("Количеством повторов должно быть ыцелое число или переменная!")
-            return None 
+            return None
         program = 'for (int i{} = 0; i{} < {}; ++i{})'
         program = program.format(recursion_depth, recursion_depth, self.text_field2.text(), recursion_depth)
         program += '{\n'
         # for child in self.child_blocks:
         #     program += child.generate_code(recursion_depth + 1)
         if self.child_blocks:
-            program += self.child_blocks[0].generate_code(recursion_depth + 1)
+            code = self.child_blocks[0].generate_code(recursion_depth + 1)
+            if code is None:
+                return None
+            program += code
         program += '}\n'
         if self.next_block:
             result = self.next_block.generate_code(recursion_depth)
             if result is None:
                 return None
-            return program + result 
+            return program + result
         return program
 
 class WhileCycleBlock(ControlBlock):
@@ -1258,7 +1139,7 @@ class WhileCycleBlock(ControlBlock):
 
        #Add combo box
         self.combo_box = QComboBox()
-        self.combo_box.addItems(['==', '!=', '>', '<'])
+        self.combo_box.addItems(['==', '!=', '>', '>=', '<', '<='])
         self.combo_box.setFont(QFont('Arial', 10))
 
         self.combo_box_proxy = QGraphicsProxyWidget(self)
@@ -1282,7 +1163,7 @@ class WhileCycleBlock(ControlBlock):
             (self.width - text_rect.width()) / 10 * 9, (text_rect.height()) / 2)
 
     def generate_code(self, recursion_depth=0):
-        
+
         if not is_valid_integer_or_var(self.text_field.text()):
             show_message_box("Циклы с условием применимы только для переменных и целых чисел!")
             return None
@@ -1295,15 +1176,17 @@ class WhileCycleBlock(ControlBlock):
         # for child in self.child_blocks:
         #     program += child.generate_code(recursion_depth + 1)
         if self.child_blocks:
-            program += self.child_blocks[0].generate_code(recursion_depth + 1)
+            code = self.child_blocks[0].generate_code(recursion_depth + 1)
+            if code is None:
+                return None
+            program += code
         program += '}'
         if self.next_block:
             result = self.next_block.generate_code(recursion_depth)
             if result is None:
                 return None
-            return program + result 
+            return program + result
         return program
-
 
 class DigitalReadBlock(Block):
     def __init__(self, text, color, parent=None):
@@ -1361,7 +1244,6 @@ class DigitalReadBlock(Block):
                 return None
             return program + result
         return program
-
 
 class AnalogReadBlock(Block):
     def __init__(self, text, color, parent=None):
@@ -1421,7 +1303,6 @@ class AnalogReadBlock(Block):
             return program + result
         return program
 
-
 class DigitalWriteBlock(Block):
     def __init__(self, text, color, parent=None):
         super().__init__(text, color, parent)
@@ -1472,7 +1353,6 @@ class DigitalWriteBlock(Block):
                 return None
             return program + result
         return program
-
 
 class AnalogWriteBlock(Block):
     def __init__(self, text, color, parent=None):
@@ -1526,7 +1406,6 @@ class AnalogWriteBlock(Block):
             return program + result
         return program
 
-
 class SerialReadBlock(Block):
     def __init__(self, text, color, parent=None):
         super().__init__(text, color, parent)
@@ -1557,7 +1436,6 @@ class SerialReadBlock(Block):
                 return None
             return program + result
         return program
-
 
 class SerialWriteBlock(Block):
     def __init__(self, text, color, parent=None):
@@ -1600,7 +1478,6 @@ class SerialWriteBlock(Block):
                 return None
             return program + result
         return program
-
 
 class Workspace(QGraphicsView):
     def __init__(self, parent=None):
@@ -1650,7 +1527,6 @@ class Workspace(QGraphicsView):
             event.accept()
         else:
             super().mouseReleaseEvent(event)
-
 
 class BlockPalette(QWidget):
     def __init__(self, parent=None):
