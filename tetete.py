@@ -1592,8 +1592,11 @@ class SerialReadBlock(Block):
         self.text_item.setPos((width - text_rect.width()) / 10 * 8, (height - text_rect.height()) / 2)
 
     def generate_code(self, recursion_depth=0):
-        program = super().generate_code(recursion_depth)
-        program = program.format()
+        if self.text_field.text() not in declared_variables:
+            show_message_box("Необходимо указать корректную переменную для записи результата чтения серильного порта!")
+            return None
+        program = "{} = Serial.read();"
+        program = program.format(self.text_field.text())
         if self.next_block:
             result = self.next_block.generate_code(recursion_depth)
             if result is None:
