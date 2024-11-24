@@ -35,5 +35,5 @@ pinMode(PIN33, INPUT);
 pinMode(PIN34, INPUT);
 pinMode(PIN35, INPUT);
 
-auto x1while = 1;
+auto a = 1;
 }
