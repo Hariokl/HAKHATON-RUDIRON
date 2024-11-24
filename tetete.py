@@ -2,7 +2,7 @@ import sys
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QGraphicsView, QGraphicsScene, QGraphicsItem,
     QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMessageBox, QGraphicsTextItem,
-    QGraphicsPathItem, QLineEdit, QGraphicsProxyWidget, QComboBox, QDialog
+    QGraphicsPathItem, QLineEdit, QGraphicsProxyWidget, QComboBox, QScrollArea, QDialog
 )
 from PyQt6.QtGui import QBrush, QColor, QPen, QPainterPath, QFont, QPainter, QIcon
 from PyQt6.QtCore import Qt, QRectF, QPointF
@@ -1203,7 +1203,7 @@ class ForCycleBlock(ControlBlock):
         self.text_item.setPos((delta * 4 + self.width - text_rect.width()) // 2 + text_rect2.width(), (text_rect.height()) // 2 - delta * 2)
 
     def generate_code(self, recursion_depth=0):
-        
+
         if not is_valid_integer_or_var(self.text_field2.text()):
             show_message_box("Количеством повторов должно быть ыцелое число или переменная!")
             return None 
@@ -1534,6 +1534,9 @@ class Workspace(QGraphicsView):
         self.setSceneRect(0, 0, 800, 600)
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
+        self._pan = False
+        self._last_pan_point = QPointF()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Delete:
@@ -1545,6 +1548,34 @@ class Workspace(QGraphicsView):
             event.accept()
         else:
             super().keyPressEvent(event)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.MiddleButton:
+            self._pan = True
+            self.setCursor(Qt.CursorShape.ClosedHandCursor)
+            self._last_pan_point = event.pos()
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._pan:
+            delta = self.mapToScene(event.pos()) - self.mapToScene(self._last_pan_point)
+            self._last_pan_point = event.pos()
+            self.setTransformationAnchor(QGraphicsView.ViewportAnchor.NoAnchor)
+            self.translate(-delta.x(), -delta.y())
+            event.accept()
+        else:
+            super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.MiddleButton:
+            self._pan = False
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+            event.accept()
+        else:
+            super().mouseReleaseEvent(event)
+
 
 class BlockPalette(QWidget):
     def __init__(self, parent=None):
@@ -1608,6 +1639,48 @@ class BlockPalette(QWidget):
         block.setPos(100, 100)
 
 
+class PinConfigurationWidget(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.pin_comboboxes = {}
+        self.setupUI()
+
+    def setupUI(self):
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel('<h2>DPins</h2>'))
+
+        # Scroll area
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
+
+        pin_numbers = list(range(0, 18)) + [20] + list(range(28, 36))
+        for pin_number in pin_numbers:
+            h_layout = QHBoxLayout()
+            label = QLabel(f"Pin{pin_number}")
+            combobox = QComboBox()
+            combobox.addItems(["INPUT", "OUTPUT"])
+            self.pin_comboboxes[pin_number] = combobox
+            h_layout.addWidget(label)
+            h_layout.addWidget(combobox)
+            scroll_layout.addLayout(h_layout)
+
+        scroll_layout.addStretch()
+        scroll_content.setLayout(scroll_layout)
+        scroll_area.setWidget(scroll_content)
+
+        scroll_area.setFixedWidth(200)
+
+        layout.addWidget(scroll_area)
+        self.setLayout(layout)
+
+    def get_pin_configurations(self):
+        pin_numbers = sorted(self.pin_comboboxes.keys())
+        pin_configs = [self.pin_comboboxes[pin].currentText() for pin in pin_numbers]
+        return pin_configs
+
+
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
@@ -1637,8 +1710,14 @@ class MainWindow(QWidget):
         left_layout.addStretch()
         left_layout.addWidget(self.run_button)
 
+        self.pin_config_widget = PinConfigurationWidget()
+
+        # Arrange layouts
         main_layout.addLayout(left_layout)
         main_layout.addWidget(self.workspace)
+        main_layout.addWidget(self.pin_config_widget)
+
+        self.setLayout(main_layout)
 
     def run_program(self):
         global declared_variables
@@ -1654,13 +1733,22 @@ class MainWindow(QWidget):
         # Display or execute the code
         if rudiron_code is None:
             return
+
+        # Get the pin configurations
+        pin_configs = self.pin_config_widget.get_pin_configurations()
+        print("Pin Configurations:")
+        pin_numbers = sorted(self.pin_config_widget.pin_comboboxes.keys())
+        for pin, config in zip(pin_numbers, pin_configs):
+            print(f"Pin{pin}: {config}")
+
         QMessageBox.information(
             self, "Program", f"Ваша программа успешно сгенерированна!")
         # Here you can add code to send 'rudiron_code' to the Rudiron controller
         rendered_rudiron_code = f"void setup() {{{rudiron_code}}}"
-        file = open("temp.ino", "w")
-        file.write(rendered_rudiron_code)
-        file.close()
+        print(rendered_rudiron_code)
+        with open("temp.ino", "w") as file:
+            file.write(rendered_rudiron_code)
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
