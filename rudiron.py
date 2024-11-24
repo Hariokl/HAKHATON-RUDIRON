@@ -55,7 +55,7 @@ def reset_arduino(port, baudrate=9600, reset_time=2):
         with serial.Serial(port, baudrate, timeout=1) as ser:
             # Программный сброс через DTR
             ser.dtr = False
-            time.sleep(0.5)  # Небольшая задержка
+            time.sleep(10)  # Небольшая задержка
             ser.dtr = True
             time.sleep(reset_time)  # Время на перезапуск Arduino
             print(f"Arduino на порту {port} успешно перезагружена.")

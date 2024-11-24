@@ -580,7 +580,7 @@ class Block(QGraphicsPathItem):
             'ЦЗапись': 'digitalWrite({}, {});',
             'АЗапись': 'analogWrite({}, {});',
             'Читать\nсерийный порт': 'Serial.read();',
-            'Запись\nв серийный порт': 'Serial.println("{}");'}
+            'Запись\nв серийный порт': 'Serial.println({});'}
         command = command_mapping.get(self.text, '')
         code_lines = [command]
         if self.next_block:
@@ -1637,8 +1637,10 @@ class SerialWriteBlock(Block):
         self.text_field_proxy.setPos(int(delta * 2 + text_rect.width()), (self.height - text_rect_2.height()) / 2)
 
     def generate_code(self, recursion_depth=0):
-        program = super().generate_code(recursion_depth)
-        program = program.format(self.text_field.text())
+        if not is_valid_integer_or_var(self.text_field.text()):
+            show_message_box("Записать в последовательный порт можно только число или значение переменной!")
+            return None
+        program = f"Serial.print({self.text_field.text()});"
         if self.next_block:
             result = self.next_block.generate_code(recursion_depth)
             if result is None:
@@ -2021,45 +2023,48 @@ class MainWindow(QWidget):
         self.setLayout(main_layout)
 
     def run_program(self):
-        global declared_variables
-        declared_variables = set()
-        # Find all top-level blocks
-        block = [item for item in self.workspace.scene().items()
-                 if isinstance(item, StartBlock)]
-        # Sort blocks by their vertical position
-        if len(block) == 0:
-            QMessageBox.information(self, "Program", f"Для запуска программы необходим блок 'Начало'")
-            return
-        self.serial_reader.disconnect_serial()
-        reset_arduino(self.serial_reader.port_combo.currentText())
-        rudiron_code = block[0].generate_code()
-        # Display or execute the code
-        if rudiron_code is None:
-            return
+        try:
+            global declared_variables
+            declared_variables = set()
+            # Find all top-level blocks
+            block = [item for item in self.workspace.scene().items()
+                     if isinstance(item, StartBlock)]
+            # Sort blocks by their vertical position
+            if len(block) == 0:
+                QMessageBox.information(self, "Program", f"Для запуска программы необходим блок 'Начало'")
+                return
+            self.serial_reader.disconnect_serial()
+            reset_arduino(self.serial_reader.port_combo.currentText())
+            rudiron_code = block[0].generate_code()
+            # Display or execute the code
+            if rudiron_code is None:
+                return
 
-        # Get the pin configurations
-        pin_configs = self.pin_config_widget.get_pin_configurations()
-        pin_numbers = sorted(self.pin_config_widget.pin_comboboxes.keys())
-        pin_init = ""
-        for pin, config in zip(pin_numbers, pin_configs):
-            pin_init += f"pinMode({pin}, {config});\n"
-        QMessageBox.information(
-            self, "Program", f"Ваша программа успешно сгенерированна!")
-        rendered_rudiron_code = "void setup(){"
-        rendered_rudiron_code += "Serial.begin(9600);"
-        rendered_rudiron_code += "delay(10);"
-        for i in PINS:
-            rendered_rudiron_code += f"pinMode({i}, {self.pin_config_widget.pin_comboboxes[i].currentText()});\n"
-        rendered_rudiron_code += rudiron_code
-        rendered_rudiron_code += "}"
-        rendered_rudiron_code += "void loop(){}"
-        print(rendered_rudiron_code)
-        if not os.path.isdir("temp"):
-            os.mkdir("temp")
-        with open(os.path.abspath(os.curdir) + "\\temp\\temp.ino", "w") as file:
-            file.write(rendered_rudiron_code)
-        upload_to_board(self.serial_reader.port_combo.currentText())
-        self.serial_reader.connect_serial()
+            # Get the pin configurations
+            pin_configs = self.pin_config_widget.get_pin_configurations()
+            pin_numbers = sorted(self.pin_config_widget.pin_comboboxes.keys())
+            pin_init = ""
+            for pin, config in zip(pin_numbers, pin_configs):
+                pin_init += f"pinMode({pin}, {config});\n"
+            QMessageBox.information(
+                self, "Program", f"Ваша программа успешно сгенерированна!")
+            rendered_rudiron_code = "void setup(){"
+            rendered_rudiron_code += "Serial.begin(9600);"
+            rendered_rudiron_code += "delay(10);"
+            for i in PINS:
+                rendered_rudiron_code += f"pinMode({i}, {self.pin_config_widget.pin_comboboxes[i].currentText()});\n"
+            rendered_rudiron_code += rudiron_code
+            rendered_rudiron_code += "}"
+            rendered_rudiron_code += "void loop(){}"
+            print(rendered_rudiron_code)
+            if not os.path.isdir("temp"):
+                os.mkdir("temp")
+            with open(os.path.abspath(os.curdir) + "\\temp\\temp.ino", "w") as file:
+                file.write(rendered_rudiron_code)
+            upload_to_board(self.serial_reader.port_combo.currentText())
+            self.serial_reader.connect_serial()
+        except:
+            pass
 
 
 if __name__ == '__main__':
