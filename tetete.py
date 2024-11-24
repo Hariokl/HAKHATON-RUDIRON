@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QBrush, QColor, QPen, QPainterPath, QFont, QPainter, QIcon
 from PyQt6.QtCore import Qt, QRectF, QPointF
+from rudiron import upload_to_board, reset_arduino
 
 
 import keyword
@@ -31,20 +32,10 @@ cpp_keywords = {
 }
 
 def is_valid_analog_pin(pin):
-    if isinstance(pin, int) or pin.is_digit():
-        return 21 <= pin <= 26
-    pattern = r"^PIN\d+$"
-    if not re.match(pattern, pin):
-        return False
-    return is_valid_analog_pin(int(pin[3:]))
+    return True
 
 def is_valid_digital_pin(pin):
-    if isinstance(pin, int) or pin.is_digit():
-        return 0 <= pin <= 35
-    pattern = r"^PIN\d+$"
-    if not re.match(pattern, pin):
-        return False
-    return is_valid_digital_pin(int(pin[3:]))
+    return True
 
 def is_valid_integer(value):
     # Регулярное выражение для целых чисел
@@ -1478,7 +1469,7 @@ class DigitalWriteBlock(Block):
 
     def generate_code(self, recursion_depth=0):
         program = super().generate_code(recursion_depth)
-        program = program.format(self.text_field.text(), self.combo_box.currentText)
+        program = program.format(self.text_field.text(), self.combo_box.currentText())
         if self.next_block:
             result = self.next_block.generate_code(recursion_depth)
             if result is None:
@@ -1816,6 +1807,7 @@ class MainWindow(QWidget):
         if len(block) == 0:
             QMessageBox.information(self, "Program", f"Для запуска программы необходим блок 'Начало'")
             return
+        reset_arduino("COM3")
         rudiron_code = block[0].generate_code()
         # Display or execute the code
         if rudiron_code is None:
@@ -1829,12 +1821,14 @@ class MainWindow(QWidget):
             pin_init += f"pinMode({pin}, {config});\n"
         QMessageBox.information(
             self, "Program", f"Ваша программа успешно сгенерированна!")
-        rendered_rudiron_code = f"void setup() {{\n{pin_init}{rudiron_code}}}"
+        rendered_rudiron_code = f"void setup() {{\n{pin_init}{rudiron_code}}}\nvoid loop(){{}}"
         print(rendered_rudiron_code)
         if not os.path.isdir("temp"):
             os.mkdir("temp")
         with open(os.path.abspath(os.curdir) + "\\temp\\temp.ino", "w") as file:
             file.write(rendered_rudiron_code)
+        upload_to_board("COM3")
+
 
 
 if __name__ == '__main__':
