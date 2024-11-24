@@ -10,7 +10,8 @@ from PyQt6.QtCore import Qt, QRectF, QPointF
 
 import keyword
 import re
-PINS = list(range(0, 18)) + [20] + list(range(28, 36))
+# PINS = list(range(0, 18)) + list(range(20, 27)) + list(range(28, 36))
+PINS = list(range(0, 36))
 # Список ключевых слов C++
 cpp_keywords = {
     "alignas", "alignof", "and", "and_eq", "asm", "atomic_cancel", "atomic_commit",
@@ -29,10 +30,20 @@ cpp_keywords = {
 }
 
 def is_valid_analog_pin(pin):
-    return True
+    if isinstance(pin, int) or pin.is_digit():
+        return 21 <= pin <= 26
+    pattern = r"^PIN\d+$"
+    if not re.match(pattern, pin):
+        return False
+    return is_valid_analog_pin(int(pin[3:]))
 
 def is_valid_digital_pin(pin):
-    return True
+    if isinstance(pin, int) or pin.is_digit():
+        return 0 <= pin <= 35
+    pattern = r"^PIN\d+$"
+    if not re.match(pattern, pin):
+        return False
+    return is_valid_digital_pin(int(pin[3:]))
 
 def is_valid_integer(value):
     # Регулярное выражение для целых чисел
@@ -1808,8 +1819,8 @@ class MainWindow(QWidget):
             self, "Program", f"Ваша программа успешно сгенерированна!")
         # Here you can add code to send 'rudiron_code' to the Rudiron controller
         rendered_rudiron_code = "void setup(){"
-        rendered_rudiron_code += "Serial.start(9600);"
-        rendered_rudiron_code += "delay(3);"
+        rendered_rudiron_code += "Serial.begin(9600);"
+        rendered_rudiron_code += "delay(10);"
         for i in PINS:
             rendered_rudiron_code += f"pinMode(PIN{i}, {self.pin_config_widget.pin_comboboxes[i].currentText()});\n"
         rendered_rudiron_code += rudiron_code
