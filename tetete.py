@@ -1303,25 +1303,36 @@ class DigitalReadBlock(Block):
         height = self.height
         delta = 5
 
-        self.text_item = QGraphicsTextItem("ЦЧтение", self)
+        #
+        self.text_field1 = QLineEdit()
+        self.text_field1.setFont(QFont('Arial', 16))
+        self.text_field1.setFixedWidth(30)
+        self.text_field_proxy = QGraphicsProxyWidget(self)
+        self.text_field_proxy.setWidget(self.text_field1)
+        self.text_field_proxy.setParentItem(self)
+        text_rect = self.text_field_proxy.boundingRect()
+        self.text_field_proxy.setPos((self.width - text_rect.width()) / 10, (height - text_rect.height()) / 2)
+
+        # Add text
+        self.text_item = QGraphicsTextItem("=ЦЧтение", self)
         font = QFont('Arial', 10)
         self.text_item.setFont(font)
-        text_rect = self.text_item.boundingRect()
-        self.text_item.setPos(delta * 2, (height - text_rect.height()) / 2)
+        text_rect_1 = self.text_item.boundingRect()
+        self.text_item.setPos(delta * 3 + text_rect.width(), (height - text_rect_1.height()) / 2)
 
         #
-        self.text_field = QLineEdit()
-        self.text_field.setFont(QFont('Arial', 10))
-        self.text_field.setFixedWidth(50)
+        self.text_field2 = QLineEdit()
+        self.text_field2.setFont(QFont('Arial', 16))
+        self.text_field2.setFixedWidth(30)
         self.text_field_proxy = QGraphicsProxyWidget(self)
-        self.text_field_proxy.setWidget(self.text_field)
+        self.text_field_proxy.setWidget(self.text_field2)
         self.text_field_proxy.setParentItem(self)
         text_rect_2 = self.text_field_proxy.boundingRect()
-        self.text_field_proxy.setPos(int(delta * 2 + text_rect.width() + delta), (self.height - text_rect_2.height()) / 2)
-
+        self.text_field_proxy.setPos((self.width - text_rect.width()) / 10 * 9,
+                                     (self.height - text_rect_2.height()) / 2)
     def generate_code(self, recursion_depth=0):
         program = super().generate_code(recursion_depth)
-        program = program.format(self.text_field.text())
+        program = program.format(self.text_field1.text(), self.text_field2.text())
         return program
 
 
@@ -1339,26 +1350,37 @@ class AnalogReadBlock(Block):
         height = self.height
         delta = 5
 
+        #
+        self.text_field1 = QLineEdit()
+        self.text_field1.setFont(QFont('Arial', 16))
+        self.text_field1.setFixedWidth(30)
+        self.text_field_proxy = QGraphicsProxyWidget(self)
+        self.text_field_proxy.setWidget(self.text_field1)
+        self.text_field_proxy.setParentItem(self)
+        text_rect = self.text_field_proxy.boundingRect()
+        self.text_field_proxy.setPos((self.width - text_rect.width()) / 10, (height - text_rect.height()) / 2)
+
         # Add text
-        self.text_item = QGraphicsTextItem("АЧтение", self)
+        self.text_item = QGraphicsTextItem("=АЧтение", self)
         font = QFont('Arial', 10)
         self.text_item.setFont(font)
-        text_rect = self.text_item.boundingRect()
-        self.text_item.setPos(delta * 2, (height - text_rect.height()) / 2)
+        text_rect_1 = self.text_item.boundingRect()
+        self.text_item.setPos(delta * 3 + text_rect.width(), (height - text_rect_1.height()) / 2)
 
         #
-        self.text_field = QLineEdit()
-        self.text_field.setFont(QFont('Arial', 10))
-        self.text_field.setFixedWidth(50)
+        self.text_field2 = QLineEdit()
+        self.text_field2.setFont(QFont('Arial', 16))
+        self.text_field2.setFixedWidth(30)
         self.text_field_proxy = QGraphicsProxyWidget(self)
-        self.text_field_proxy.setWidget(self.text_field)
+        self.text_field_proxy.setWidget(self.text_field2)
         self.text_field_proxy.setParentItem(self)
         text_rect_2 = self.text_field_proxy.boundingRect()
-        self.text_field_proxy.setPos(int(delta * 2 + text_rect.width() + delta), (self.height - text_rect_2.height()) / 2)
+        self.text_field_proxy.setPos((self.width - text_rect.width()) / 10 * 9,
+                                     (self.height - text_rect_2.height()) / 2)
 
     def generate_code(self, recursion_depth=0):
         program = super().generate_code(recursion_depth)
-        program = program.format(self.text_field.text())
+        program = program.format(self.text_field1.text(), self.text_field2.text())
         return program
 
 
