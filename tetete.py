@@ -2,11 +2,85 @@ import sys
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QGraphicsView, QGraphicsScene, QGraphicsItem,
     QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMessageBox, QGraphicsTextItem,
-    QGraphicsPathItem, QLineEdit, QGraphicsProxyWidget, QComboBox
+    QGraphicsPathItem, QLineEdit, QGraphicsProxyWidget, QComboBox, QDialog
 )
 from PyQt6.QtGui import QBrush, QColor, QPen, QPainterPath, QFont, QPainter, QIcon
 from PyQt6.QtCore import Qt, QRectF, QPointF
 
+
+import keyword
+import re
+
+# Список ключевых слов C++
+cpp_keywords = {
+    "alignas", "alignof", "and", "and_eq", "asm", "atomic_cancel", "atomic_commit",
+    "atomic_noexcept", "auto", "bitand", "bitor", "bool", "break", "case", "catch",
+    "char", "char8_t", "char16_t", "char32_t", "class", "compl", "concept", "const",
+    "constexpr", "const_cast", "continue", "co_await", "co_return", "co_yield",
+    "decltype", "default", "delete", "do", "double", "dynamic_cast", "else", "enum",
+    "explicit", "export", "extern", "false", "float", "for", "friend", "goto", "if",
+    "inline", "int", "long", "mutable", "namespace", "new", "noexcept", "not",
+    "not_eq", "nullptr", "operator", "or", "or_eq", "private", "protected", "public",
+    "register", "reinterpret_cast", "requires", "return", "short", "signed", "sizeof",
+    "static", "static_assert", "static_cast", "struct", "switch", "synchronized",
+    "template", "this", "thread_local", "throw", "true", "try", "typedef", "typeid",
+    "typename", "union", "unsigned", "using", "virtual", "void", "volatile",
+    "wchar_t", "while", "xor", "xor_eq"
+}
+
+
+def is_valid_integer(value):
+    # Регулярное выражение для целых чисел
+    pattern = r'^[+-]?\d+$'
+    return bool(re.match(pattern, value))
+
+def is_valid_cpp_variable_name(name):
+    # Проверяем, что имя не является ключевым словом C++
+    if name in cpp_keywords:
+        return False
+    
+    # Проверяем формат имени переменной
+    if re.match(r'^[a-zA-Z_]\w*$', name):
+        return True
+    return False
+
+# Пример использования
+test_names = ["variable", "2variable", "_variable", "int", "var_123"]
+for name in test_names:
+    print(f"{name}: {'Valid' if is_valid_cpp_variable_name(name) else 'Invalid'}")
+
+declared_variables = set() # should fix it, temp impl
+
+def is_valid_integer_or_var(text):
+    return is_valid_integer(text) or text in declared_variables
+
+def show_message_box(text, title="Внимание"):
+    message_box = QMessageBox()
+    message_box.setWindowTitle(title)
+    message_box.setText(text)
+    message_box.setStandardButtons(QMessageBox.StandardButton.Yes)
+    message_box.setIcon(QMessageBox.Icon.Warning)
+    message_box.exec()
+
+class PopupWindow(QDialog):
+    def __init__(self, title, text, width=300, height=50):
+        super().__init__()
+        self.setWindowTitle(title)
+        self.resize(width, height)
+
+        # Добавляем элементы в окно
+        layout = QVBoxLayout()
+        label = QLabel(text)
+        close_button = QPushButton("Закрыть")
+
+        # Закрытие окна по нажатию кнопки
+        close_button.clicked.connect(self.close)
+
+        layout.addWidget(label)
+        layout.addWidget(close_button)
+        self.setLayout(layout)
+
+    
 class Block(QGraphicsPathItem):
     def __init__(self, text, color, parent=None):
         super().__init__(parent)
@@ -341,8 +415,27 @@ class Block(QGraphicsPathItem):
     #     else:
     #         # If not snapped to anything, ensure the block is standalone
     #         pass  # Do not disconnect here to maintain existing connections
+    def reposition_next_blocks(self):
+        y_offset = self.height + self.y()
+        current = self.next_block
+        while current:
+            current.setPos(self.x(), y_offset)
+            y_offset += current.boundingRect().height()
+            if isinstance(current, ControlBlock):
+                current.reposition_child_blocks()
+            current = current.next_block
 
+    def reposition_prev_blocks(self):
+        y_offset = -self.height + self.y()
+        current = self.prev_block
+        while current:
+            current.setPos(self.x(), y_offset)
+            y_offset -= current.boundingRect().height()
+            if isinstance(current, ControlBlock):
+                current.reposition_child_blocks()
+            current = current.prev_block
 
+    
     def snap_to_block(self):
         if self.highlighted_block:
             # Reset pen of the highlighted block
@@ -378,6 +471,7 @@ class Block(QGraphicsPathItem):
                         if prev_block.parent_block is not None:
                             prev_block.parent_block.add_child_blocks(self)
                         prev_block = prev_block.prev_block
+                    self.reposition_prev_blocks()
                 elif self.is_near(self.highlighted_block, below=True):
                     if self.highlighted_block.next_block is not None and self.highlighted_block.next_block != self:
                         self.next_block = self.highlighted_block.next_block
@@ -396,6 +490,7 @@ class Block(QGraphicsPathItem):
                         if prev_block.parent_block is not None:
                             prev_block.parent_block.add_child_blocks(self)
                         prev_block = prev_block.parent_block
+                    self.reposition_next_blocks()
 
             self.highlighted_block = None
         else:
@@ -474,7 +569,10 @@ class Block(QGraphicsPathItem):
         command = command_mapping.get(self.text, '')
         code_lines = [command]
         if self.next_block:
-            code_lines.append(self.next_block.generate_code())
+            code = self.next_block.generate_code()
+            if code is None:
+                return
+            code_lines.append(code)
         return '\n'.join(code_lines)
 
     def suicide(self):
@@ -690,10 +788,23 @@ class VariableBlock(Block):
         self.text_field_proxy.setPos(delta * 2 + text_rect.width() + int(delta * 2 * 1.5) + text_rect_1.width(), (self.height - text_rect_2.height()) / 2)
 
     def generate_code(self):
+        if self.text_field1.text() == "" or not is_valid_cpp_variable_name(self.text_field1.text()):
+            show_message_box(f"Название переменной '{self.text_field1.text()}' некорректно!")
+            return None
+        if not is_valid_integer_or_var(self.text_field2.text()):
+            show_message_box(f"Значение переменной '{self.text_field1.text()}' должно быть целым числом или переменной!")
+            return None
+        if self.text_field1.text() in declared_variables:
+            show_message_box(f"Переменная '{self.text_field1.text()}' объявлена несколько раз!")
+            return None
+        declared_variables.add(self.text_field1.text())
         program = 'auto {} = {};\n'
         program = program.format(self.text_field1.text(), self.text_field2.text())
         if self.next_block:
-            return program + self.next_block.generate_code()
+            result = self.next_block.generate_code()
+            if result is None:
+                return None
+            return program + result
         return program
 
 class ArithmeticBlock(Block):
@@ -762,9 +873,21 @@ class ArithmeticBlock(Block):
 
     def generate_code(self, i=1):
         program = '{} = {} {} {};'
+        if self.text_field1.text() not in declared_variables:
+            show_message_box(f"Переменная {self.text_field1.text()} не объявлена!")
+            return None
+        if not is_valid_integer_or_var( self.text_field2.text()):
+            show_message_box(f"Значение левого операнда должно быть целым числом или переменной!")
+            return None
+        if not is_valid_integer_or_var( self.text_field3.text()):
+            show_message_box(f"Значение правого операнда должно быть целым числом или переменной!")
+            return None 
         program = program.format(self.text_field1.text(), self.text_field2.text(), self.combo_box.currentText(), self.text_field3.text())
         if self.next_block:
-            return program + self.next_block.generate_code()
+            result = self.next_block.generate_code()
+            if result is None:
+                return None
+            return program + result
         return program
 
 
@@ -800,10 +923,16 @@ class DelayBlock(Block):
             (self.width - text_rect.width()) / 5 * 3.5, (self.height - text_rect.height()) / 2)
 
     def generate_code(self):
+        if not is_valid_integer_or_var(self.text_field.text()):
+            show_message_box("Продолжительность сна должна быть целым числом или переменной!")
+            return None
         program = 'delay({});\n'
         program = program.format(self.text_field.text())
         if self.next_block:
-            return program + self.next_block.generate_code()
+            result = self.next_block.generate_code()
+            if result is None:
+                return None
+            return program + result        
         return program
 
 class ControlBlock(Block):
@@ -877,8 +1006,8 @@ class ControlBlock(Block):
         # Remove any previous connections
         # block.disconnect_blocks()
         # Add a block and its connected next blocks as child blocks
-        # blocks_to_add = block.get_all_connected_blocks()
-        blocks_to_add = [block]
+        blocks_to_add = block.get_all_connected_blocks()
+        # blocks_to_add = [block]
         for blk in blocks_to_add:
             blk.parent_block = self
             if blk in self.child_blocks:
@@ -1007,6 +1136,12 @@ class ConditionBlock(ControlBlock):
             (self.width - text_rect.width()) / 10 * 9, (text_rect.height()) / 2)
 
     def generate_code(self):
+        if not is_valid_integer_or_var(self.text_field.text()):
+            show_message_box("Условия применимы только для переменных и целых чисел!")
+            return None
+        if not is_valid_integer_or_var(self.text_field2.text()):
+            show_message_box("Условия применимы только для переменных и целых чисел!")
+            return None
         program = 'if ({} {} {})'
         program = program.format(self.text_field.text(), self.combo_box.currentText(), self.text_field2.text())
         program += '{\n'
@@ -1014,7 +1149,10 @@ class ConditionBlock(ControlBlock):
             program += child.generate_code()
         program += '}\n'
         if self.next_block:
-            return program + self.next_block.generate_code()
+            result = self.next_block.generate_code()
+            if result is None:
+                return None
+            return program + result 
         return program
 
 class ForCycleBlock(ControlBlock):
@@ -1055,6 +1193,10 @@ class ForCycleBlock(ControlBlock):
         self.text_item.setPos((delta * 4 + self.width - text_rect.width()) // 2 + text_rect2.width(), (text_rect.height()) // 2 - delta * 2)
 
     def generate_code(self):
+        
+        if not is_valid_integer_or_var(self.text_field2):
+            show_message_box("Количеством повторов должно быть ыцелое число или переменная!")
+            return None 
         program = 'for (int i = 0; i < {}; ++i)'
         program = program.format(self.text_field2.text())
         program += '{\n'
@@ -1062,7 +1204,10 @@ class ForCycleBlock(ControlBlock):
             program += child.generate_code()
         program += '}\n'
         if self.next_block:
-            return program + self.next_block.generate_code()
+            result = self.next_block.generate_code()
+            if result is None:
+                return None
+            return program + result 
         return program
 
 class WhileCycleBlock(ControlBlock):
@@ -1114,6 +1259,13 @@ class WhileCycleBlock(ControlBlock):
             (self.width - text_rect.width()) / 10 * 9, (text_rect.height()) / 2)
 
     def generate_code(self, i=1):
+        
+        if not is_valid_integer_or_var(self.text_field.text()):
+            show_message_box("Циклы с условием применимы только для переменных и целых чисел!")
+            return None
+        if not is_valid_integer_or_var(self.text_field2.text()):
+            show_message_box("Циклы с условием применимы только для переменных и целых чисел!")
+            return None
         program = 'while ({} {} {})'
         program = program.format(self.text_field.text(), self.combo_box.currentText(), self.text_field2.text())
         program += '{'
@@ -1121,7 +1273,10 @@ class WhileCycleBlock(ControlBlock):
             program += child.generate_code()
         program += '}'
         if self.next_block:
-            return program + self.next_block.generate_code()
+            result = self.next_block.generate_code()
+            if result is None:
+                return None
+            return program + result 
         return program
 
 
@@ -1472,6 +1627,8 @@ class MainWindow(QWidget):
         main_layout.addWidget(self.workspace)
 
     def run_program(self):
+        global declared_variables
+        declared_variables = set()
         # Find all top-level blocks
         block = [item for item in self.workspace.scene().items()
                   if isinstance(item, StartBlock)]
@@ -1479,9 +1636,10 @@ class MainWindow(QWidget):
         if len(block) == 0:
             QMessageBox.information(self, "Program", f"Для запуска программы необходим блок 'Начало'")
             return
-
         rudiron_code = block[0].generate_code()
         # Display or execute the code
+        if rudiron_code is None:
+            return
         QMessageBox.information(
             self, "Program", f"Ваша программа успешно сгенерированна!")
         # Here you can add code to send 'rudiron_code' to the Rudiron controller
